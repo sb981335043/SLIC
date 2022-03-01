@@ -9,11 +9,17 @@
 #include <algorithm>
 using namespace std;
 
-class SLIC
-{
-public:
-	SLIC();
-	virtual ~SLIC();
+	int m_width;
+	int m_height;
+	int m_depth;
+
+	double *m_lvec=NULL;
+	double *m_avec=NULL;
+	double *m_bvec=NULL;
+
+	double **m_lvecvec=NULL;
+	double **m_avecvec=NULL;
+	double **m_bvecvec=NULL;
 
 	//============================================================================
 	// Superpixel segmentation for a given number of superpixels	输入
@@ -36,9 +42,8 @@ public:
 		const int width,
 		const int height);
 
-private:
 	//============================================================================
-	// Magic SLIC. No need to set M (compactness factor) and S (step size). #两种模式
+	// Magic  No need to set M (compactness factor) and S (step size). #两种模式
 	// SLICO (SLIC Zero) varies only M dynamicaly, not S.
 	//============================================================================
 	void PerformSuperpixelSegmentation_VariableSandM(
@@ -128,20 +133,6 @@ private:
 		int &numlabels, //the number of labels changes in the end if segments are removed
 		const int &K);	//the number of superpixels desired by the user
 
-private:
-	int m_width;
-	int m_height;
-	int m_depth;
-
-	double *m_lvec;
-	double *m_avec;
-	double *m_bvec;
-
-	double **m_lvecvec;
-	double **m_avecvec;
-	double **m_bvecvec;
-};
-
 
 
 
@@ -164,48 +155,8 @@ const int dz10[10] = {0, 0, 0, 0, 0, 0, 0, 0, -1, 1};
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-SLIC::SLIC()
-{
-	m_lvec = NULL;
-	m_avec = NULL;
-	m_bvec = NULL;
 
-	m_lvecvec = NULL;
-	m_avecvec = NULL;
-	m_bvecvec = NULL;
-}
-
-SLIC::~SLIC()
-{
-	if (m_lvec)
-		delete[] m_lvec;
-	if (m_avec)
-		delete[] m_avec;
-	if (m_bvec)
-		delete[] m_bvec;
-
-	if (m_lvecvec)
-	{
-		for (int d = 0; d < m_depth; d++)
-			delete[] m_lvecvec[d];
-		delete[] m_lvecvec;
-	}
-	if (m_avecvec)
-	{
-		for (int d = 0; d < m_depth; d++)
-			delete[] m_avecvec[d];
-		delete[] m_avecvec;
-	}
-	if (m_bvecvec)
-	{
-		for (int d = 0; d < m_depth; d++)
-			delete[] m_bvecvec[d];
-		delete[] m_bvecvec;
-	}
-}
-
-
-void SLIC::RGB2LAB(const int &sR, const int &sG, const int &sB, double &lval, double &aval, double &bval, double *&tableRGB)
+void RGB2LAB(const int &sR, const int &sG, const int &sB, double &lval, double &aval, double &bval, double *&tableRGB)
 {
 	//------------------------
 	// sRGB to XYZ conversion
@@ -235,7 +186,7 @@ void SLIC::RGB2LAB(const int &sR, const int &sG, const int &sB, double &lval, do
 	bval = 200.0 * (fy - fz);
 }
 
-void SLIC::DoRGBtoLABConversion(
+void DoRGBtoLABConversion(
 	const unsigned int *&ubuff,
 	double *&lvec,
 	double *&avec,
@@ -270,7 +221,7 @@ void SLIC::DoRGBtoLABConversion(
 //==============================================================================
 ///	DetectLabEdges
 //==============================================================================
-void SLIC::DetectLabEdges(
+void DetectLabEdges(
 	const double *lvec,
 	const double *avec,
 	const double *bvec,
@@ -304,7 +255,7 @@ void SLIC::DetectLabEdges(
 //===========================================================================
 ///	PerturbSeeds
 //===========================================================================
-void SLIC::PerturbSeeds(
+void PerturbSeeds(
 	vector<double> &kseedsl,
 	vector<double> &kseedsa,
 	vector<double> &kseedsb,
@@ -354,7 +305,7 @@ void SLIC::PerturbSeeds(
 ///
 /// The k seed values are taken as uniform spatial pixel samples.
 //===========================================================================
-void SLIC::GetLABXYSeeds_ForGivenK(
+void GetLABXYSeeds_ForGivenK(
 	vector<double> &kseedsl,
 	vector<double> &kseedsa,
 	vector<double> &kseedsb,
@@ -428,7 +379,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 /// SLICO (or SLIC Zero) dynamically varies only the compactness factor S,
 /// not the step size S.
 //===========================================================================
-void SLIC::PerformSuperpixelSegmentation_VariableSandM(
+void PerformSuperpixelSegmentation_VariableSandM(
 	vector<double> &kseedsl,
 	vector<double> &kseedsa,
 	vector<double> &kseedsb,
@@ -578,7 +529,7 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 ///
 ///	Save labels to PGM in raster scan order.
 //===========================================================================
-void SLIC::SaveSuperpixelLabels2PPM(
+void SaveSuperpixelLabels2PPM(
 	char *filename,
 	int *labels,
 	const int width,
@@ -623,7 +574,7 @@ void SLIC::SaveSuperpixelLabels2PPM(
 ///		2. if a certain component is too small, assigning the previously found
 ///		    adjacent label to this component, and not incrementing the label.
 //===========================================================================
-void SLIC::EnforceLabelConnectivity(
+void EnforceLabelConnectivity(
 	const int *labels, //input labels that need to be corrected to remove stray labels
 	const int &width,
 	const int &height,
@@ -729,7 +680,7 @@ void SLIC::EnforceLabelConnectivity(
 ///
 /// Zero parameter SLIC algorithm for a given number K of superpixels.
 //===========================================================================
-void SLIC::PerformSLICO_ForGivenK(
+void PerformSLICO_ForGivenK(
 	const unsigned int *ubuff,
 	const int width,
 	const int height,
@@ -925,13 +876,12 @@ int main(int argc, char **argv)
 	int sz = width * height;
 	int *labels = new int[sz];
 	int numlabels(0);
-	SLIC slic;
 	int m_spcount;
 	double m_compactness;
 	m_spcount = argc < 2 ? 200 : stoi(argv[1]);
 	m_compactness = 10.0;
 	auto startTime = Clock::now();
-	slic.PerformSLICO_ForGivenK(img, width, height, labels, numlabels, m_spcount, m_compactness); //for a given number K of superpixels
+	PerformSLICO_ForGivenK(img, width, height, labels, numlabels, m_spcount, m_compactness); //for a given number K of superpixels
 	auto endTime = Clock::now();
 	auto compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
 	cout << "Computing time=" << compTime.count() / 1000 << " ms" << endl;
@@ -946,12 +896,38 @@ int main(int argc, char **argv)
 		cout << "There are " << num << " points' labels are different from original file." << endl;
 	}
 
-	slic.SaveSuperpixelLabels2PPM((char *)"output_labels.ppm", labels, width, height);
+	SaveSuperpixelLabels2PPM((char *)"output_labels.ppm", labels, width, height);
 	if (labels)
 		delete[] labels;
 
 	if (img)
 		delete[] img;
 
+
+	if (m_lvec)
+		delete[] m_lvec;
+	if (m_avec)
+		delete[] m_avec;
+	if (m_bvec)
+		delete[] m_bvec;
+
+	if (m_lvecvec)
+	{
+		for (int d = 0; d < m_depth; d++)
+			delete[] m_lvecvec[d];
+		delete[] m_lvecvec;
+	}
+	if (m_avecvec)
+	{
+		for (int d = 0; d < m_depth; d++)
+			delete[] m_avecvec[d];
+		delete[] m_avecvec;
+	}
+	if (m_bvecvec)
+	{
+		for (int d = 0; d < m_depth; d++)
+			delete[] m_bvecvec[d];
+		delete[] m_bvecvec;
+	}
 	return 0;
 }
