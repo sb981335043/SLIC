@@ -136,10 +136,6 @@ private:
 	double *m_lvec;
 	double *m_avec;
 	double *m_bvec;
-
-	double **m_lvecvec;
-	double **m_avecvec;
-	double **m_bvecvec;
 };
 
 
@@ -183,25 +179,6 @@ SLIC::~SLIC()
 		delete[] m_avec;
 	if (m_bvec)
 		delete[] m_bvec;
-
-	if (m_lvecvec)
-	{
-		for (int d = 0; d < m_depth; d++)
-			delete[] m_lvecvec[d];
-		delete[] m_lvecvec;
-	}
-	if (m_avecvec)
-	{
-		for (int d = 0; d < m_depth; d++)
-			delete[] m_avecvec[d];
-		delete[] m_avecvec;
-	}
-	if (m_bvecvec)
-	{
-		for (int d = 0; d < m_depth; d++)
-			delete[] m_bvecvec[d];
-		delete[] m_bvecvec;
-	}
 }
 
 
