@@ -50,7 +50,7 @@ private:
 		double* seeds,
 		int *klabels,
 		const int &STEP,
-		const int &NUMITR);
+		const int &NUMITR,int K);
 
 	//============================================================================
 	// Pick seeds for superpixels when number of superpixels is input.
@@ -313,10 +313,10 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 	double* seeds,
 	int *klabels,
 	const int &STEP,
-	const int &NUMITR)
+	const int &NUMITR, int K)
 {
 	int sz = m_width * m_height;
-	const int numk = 200;
+	const int numk = K;
 	//double cumerr(99999.9);
 	int numitr(0);
 
@@ -623,7 +623,7 @@ void SLIC::PerformSLICO_ForGivenK(
 	// vector<double> kseedsb(0);
 	// vector<double> kseedsx(0);
 	// vector<double> kseedsy(0);
-	double* seeds = new double[5*200];
+	double* seeds = new double[5*K];
 	
 	//--------------------------------------------------
 	m_width = width;
@@ -658,8 +658,7 @@ void SLIC::PerformSLICO_ForGivenK(
 	GetLABXYSeeds_ForGivenK(seeds, K, perturbseeds);
 
 	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
-	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, STEP, 10);
-	numlabels = 200;
+	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, STEP, 10, K);
 
 	int *nlabels = new int[sz];
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
