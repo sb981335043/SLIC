@@ -97,86 +97,56 @@ void SLIC::DoRGBtoLABConversion(
 	delete[] tableRGB;
 }
 
-//==============================================================================
-///	DetectLabEdges
-//==============================================================================
-void SLIC::DetectLabEdges(
-	const double *lvec,
-	const double *avec,
-	const double *bvec,
-	const int &width,
-	const int &height,
-	vector<double> &edges)
+// //==============================================================================
+// ///	DetectLabEdges
+// //==============================================================================
+// void SLIC::DetectLabEdges(
+// 	const double *lvec,
+// 	const double *avec,
+// 	const double *bvec,
+// 	const int &width,
+// 	const int &height,
+// 	vector<double> &edges)
+// {
+// 	int sz = width * height;
+
+// 	edges.resize(sz, 0);
+// 	for (int j = 1; j < height - 1; j++)
+// 	{
+// 		for (int k = 1; k < width - 1; k++)
+// 		{
+// 			int i = j * width + k;
+
+// 			double dx = (lvec[i - 1] - lvec[i + 1]) * (lvec[i - 1] - lvec[i + 1]) +
+// 						(avec[i - 1] - avec[i + 1]) * (avec[i - 1] - avec[i + 1]) +
+// 						(bvec[i - 1] - bvec[i + 1]) * (bvec[i - 1] - bvec[i + 1]);
+
+// 			double dy = (lvec[i - width] - lvec[i + width]) * (lvec[i - width] - lvec[i + width]) +
+// 						(avec[i - width] - avec[i + width]) * (avec[i - width] - avec[i + width]) +
+// 						(bvec[i - width] - bvec[i + width]) * (bvec[i - width] - bvec[i + width]);
+
+// 			//edges[i] = (sqrt(dx) + sqrt(dy));
+// 			edges[i] = (dx + dy);
+// 		}
+// 	}
+// }
+
+double SLIC::DetectLABPixelEdge(
+	const int &i)
 {
-	int sz = width * height;
+	const double *lvec = m_lvec;
+	const double *avec = m_avec;
+	const double *bvec = m_bvec;
+	const int width = m_width;
 
-	edges.resize(sz, 0);
-	for (int j = 1; j < height - 1; j++)
-	{
-		for (int k = 1; k < width - 1; k++)
-		{
-			int i = j * width + k;
+	double dx = (lvec[i - 1] - lvec[i + 1]) * (lvec[i - 1] - lvec[i + 1]) +
+				(avec[i - 1] - avec[i + 1]) * (avec[i - 1] - avec[i + 1]) +
+				(bvec[i - 1] - bvec[i + 1]) * (bvec[i - 1] - bvec[i + 1]);
 
-			double dx = (lvec[i - 1] - lvec[i + 1]) * (lvec[i - 1] - lvec[i + 1]) +
-						(avec[i - 1] - avec[i + 1]) * (avec[i - 1] - avec[i + 1]) +
-						(bvec[i - 1] - bvec[i + 1]) * (bvec[i - 1] - bvec[i + 1]);
-
-			double dy = (lvec[i - width] - lvec[i + width]) * (lvec[i - width] - lvec[i + width]) +
-						(avec[i - width] - avec[i + width]) * (avec[i - width] - avec[i + width]) +
-						(bvec[i - width] - bvec[i + width]) * (bvec[i - width] - bvec[i + width]);
-
-			//edges[i] = (sqrt(dx) + sqrt(dy));
-			edges[i] = (dx + dy);
-		}
-	}
-}
-
-//===========================================================================
-///	PerturbSeeds
-//===========================================================================
-void SLIC::PerturbSeeds(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
-	const vector<double> &edges)
-{
-	const int dx8[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
-	const int dy8[8] = {0, -1, -1, -1, 0, 1, 1, 1};
-
-	int numseeds = kseedsl.size();
-
-	for (int n = 0; n < numseeds; n++)
-	{
-		int ox = kseedsx[n]; //original x
-		int oy = kseedsy[n]; //original y
-		int oind = oy * m_width + ox;
-
-		int storeind = oind;
-		for (int i = 0; i < 8; i++)
-		{
-			int nx = ox + dx8[i]; //new x
-			int ny = oy + dy8[i]; //new y
-
-			if (nx >= 0 && nx < m_width && ny >= 0 && ny < m_height)
-			{
-				int nind = ny * m_width + nx;
-				if (edges[nind] < edges[storeind])
-				{
-					storeind = nind;
-				}
-			}
-		}
-		if (storeind != oind)
-		{
-			kseedsx[n] = storeind % m_width;
-			kseedsy[n] = storeind / m_width;
-			kseedsl[n] = m_lvec[storeind];
-			kseedsa[n] = m_avec[storeind];
-			kseedsb[n] = m_bvec[storeind];
-		}
-	}
+	double dy = (lvec[i - width] - lvec[i + width]) * (lvec[i - width] - lvec[i + width]) +
+				(avec[i - width] - avec[i + width]) * (avec[i - width] - avec[i + width]) +
+				(bvec[i - width] - bvec[i + width]) * (bvec[i - width] - bvec[i + width]);
+	return dx + dy;
 }
 
 //===========================================================================
@@ -191,8 +161,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	vector<double> &kseedsx,
 	vector<double> &kseedsy,
 	const int &K,
-	const bool &perturbseeds,
-	const vector<double> &edgemag)
+	const bool &perturbseeds)
 {
 	int sz = m_width * m_height;
 	double step = sqrt(double(sz) / double(K));
@@ -200,8 +169,9 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	int xoff = step / 2;
 	int yoff = step / 2;
 
-	int n(0);
-	int r(0);
+	// int n(0);
+	// int r(0);
+	#pragma omp parallel for collapse(2)
 	for (int y = 0; y < m_height; y++)
 	{
 		int Y = y * step + yoff;
@@ -229,14 +199,46 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 			kseedsb.push_back(m_bvec[i]);
 			kseedsx.push_back(X);
 			kseedsy.push_back(Y);
-			n++;
+			// n++;
 		}
-		r++;
+		// r++;
 	}
 
 	if (perturbseeds)
 	{
-		PerturbSeeds(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, edgemag);
+		const int dx8[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
+		const int dy8[8] = {0, -1, -1, -1, 0, 1, 1, 1};
+		int numseeds = kseedsl.size();
+		#pragma omp parallel for
+		for (int n = 0; n < numseeds; n++)
+		{
+			int ox = kseedsx[n]; //original x
+			int oy = kseedsy[n]; //original y
+			int oind = oy * m_width + ox;
+			int storeind = oind;
+			for (int i = 0; i < 8; i++)
+			{
+				int nx = ox + dx8[i]; //new x
+				int ny = oy + dy8[i]; //new y
+
+				if (nx >= 0 && nx < m_width && ny >= 0 && ny < m_height)
+				{
+					int nind = ny * m_width + nx;
+					if (DetectLABPixelEdge(nind) < DetectLABPixelEdge(storeind))
+					{
+						storeind = nind;
+					}
+				}
+			}
+			if (storeind != oind)
+			{
+				kseedsx[n] = storeind % m_width;
+				kseedsy[n] = storeind / m_width;
+				kseedsl[n] = m_lvec[storeind];
+				kseedsa[n] = m_avec[storeind];
+				kseedsb[n] = m_bvec[storeind];
+			}
+		}
 	}
 }
 
@@ -602,10 +604,10 @@ void SLIC::PerformSLICO_ForGivenK(
 	//--------------------------------------------------
 
 	bool perturbseeds(true);
-	vector<double> edgemag(0);
-	if (perturbseeds)
-		DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
-	GetLABXYSeeds_ForGivenK(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, K, perturbseeds, edgemag);
+	// vector<double> edgemag(0);
+	// if (perturbseeds)
+	// 	DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
+	GetLABXYSeeds_ForGivenK(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, K, perturbseeds);
 
 	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
 	PerformSuperpixelSegmentation_VariableSandM(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, klabels, STEP, 10);

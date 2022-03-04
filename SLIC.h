@@ -58,30 +58,11 @@ private:
 		vector<double> &kseedsx,
 		vector<double> &kseedsy,
 		const int &STEP,
-		const bool &perturbseeds,
-		const vector<double> &edges);
+		const bool &perturbseeds);
 
-	//============================================================================
-	// Move the seeds to low gradient positions to avoid putting seeds at region boundaries.
-	//============================================================================
-	void PerturbSeeds(
-		vector<double> &kseedsl,
-		vector<double> &kseedsa,
-		vector<double> &kseedsb,
-		vector<double> &kseedsx,
-		vector<double> &kseedsy,
-		const vector<double> &edges);
 
-	//============================================================================
-	// Detect color edges, to help PerturbSeeds()
-	//============================================================================
-	void DetectLabEdges(
-		const double *lvec,
-		const double *avec,
-		const double *bvec,
-		const int &width,
-		const int &height,
-		vector<double> &edges);
+	double DetectLABPixelEdge(
+	const int &i);
 
 	//============================================================================
 	// sRGB to CIELAB conversion for 2-D images
