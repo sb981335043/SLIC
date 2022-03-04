@@ -659,7 +659,7 @@ void SLIC::PerformSLICO_ForGivenK(
 
 	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
 	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, STEP, 10, K);
-
+	numlabels=K;
 	int *nlabels = new int[sz];
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
 	{
