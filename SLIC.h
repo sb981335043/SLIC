@@ -48,6 +48,15 @@ private:
 		const int &STEP,
 		const int &NUMITR);
 
+	void DetectLabEdges(
+		const double*				lvec,
+		const double*				avec,
+		const double*				bvec,
+		const int&					width,
+		const int&					height,
+		vector<double>&				edges);
+
+
 	//============================================================================
 	// Pick seeds for superpixels when number of superpixels is input.
 	//============================================================================
@@ -58,7 +67,8 @@ private:
 		vector<double> &kseedsx,
 		vector<double> &kseedsy,
 		const int &STEP,
-		const bool &perturbseeds);
+		const bool &perturbseeds,
+		const vector<double> &edges);
 
 
 	double DetectLABPixelEdge(
