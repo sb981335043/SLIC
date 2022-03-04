@@ -5,6 +5,7 @@
 #include <fstream>
 #include "SLIC.h"
 #include <chrono>
+#include <omp.h>
 
 typedef chrono::high_resolution_clock Clock;
 
@@ -89,9 +90,9 @@ void SLIC::DoRGBtoLABConversion(
 		else fz = (7.152275872710678 * Z + 0.1379310344827586);
 		//这里通过
 
-		lval = 116.0 * fy - 16.0;
-		aval = 500.0 * (fx - fy);
-		bval = 200.0 * (fy - fz);
+		lvec[j] = 116.0 * fy - 16.0;
+		avec[j] = 500.0 * (fx - fy);
+		bvec[j] = 200.0 * (fy - fz);
 	}
 	delete[] tableRGB;
 }
