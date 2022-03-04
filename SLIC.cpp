@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <omp.h>
 using namespace std;
 
 inline double square(double x)
@@ -234,8 +235,8 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 		#pragma omp parallel for
 		for (int n = 0; n < numseeds; n++)
 		{
-			int ox = seeds[2*n]; //original x
-			int oy = seeds[2*n+1]; //original y
+			int ox = seeds[5*n+3]; //original x
+			int oy = seeds[5*n+4]; //original y
 			int oind = oy * m_width + ox;
 
 			int storeind = oind;
@@ -274,8 +275,8 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 			{
 				double* seed = seeds+storeind*5;
 				double* labval = m_labvec + storeind*3;
-				seed[4] = storeind % m_width;
-				seed[5] = storeind / m_width;
+				seed[3] = storeind % m_width;
+				seed[4] = storeind / m_width;
 				// seed[3] = storeind % m_width;
 				// seed[4] = storeind / m_width;
 				#pragma omp simd
