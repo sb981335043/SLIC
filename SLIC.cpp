@@ -6,8 +6,9 @@
 #include "SLIC.h"
 #include <chrono>
 #include <omp.h>
-
 typedef chrono::high_resolution_clock Clock;
+
+int numThreads = 256;
 
 // For superpixels
 const int dx4[4] = {-1, 0, 1, 0};
