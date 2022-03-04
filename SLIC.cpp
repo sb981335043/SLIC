@@ -169,9 +169,9 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	int xoff = step / 2;
 	int yoff = step / 2;
 
-	// int n(0);
-	// int r(0);
-	#pragma omp parallel for collapse(2)
+	 int n(0);
+	 int r(0);
+
 	for (int y = 0; y < m_height; y++)
 	{
 		int Y = y * step + yoff;
@@ -201,7 +201,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 			kseedsy.push_back(Y);
 			// n++;
 		}
-		// r++;
+		 r++;
 	}
 
 	if (perturbseeds)
