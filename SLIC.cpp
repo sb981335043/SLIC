@@ -56,7 +56,7 @@ private:
 	//============================================================================
 	// Pick seeds for superpixels when number of superpixels is input.
 	//============================================================================
-	void GetLABXYSeeds_ForGivenK(
+	int GetLABXYSeeds_ForGivenK(
 		double* seeds,
 		const int &STEP,
 		const bool &perturbseeds);
@@ -173,20 +173,20 @@ void SLIC::DoRGBtoLABConversion(
 }
 
 
-void SLIC::GetLABXYSeeds_ForGivenK(
+int SLIC::GetLABXYSeeds_ForGivenK(
 	double* seeds,
 	const int &K,
 	const bool &perturbseeds)
 {
 	int sz = m_width * m_height;
 	double step = sqrt(double(sz) / double(K));
-	int T = step;
+	int T = step;//225
 	int xoff = step / 2;
 	int yoff = step / 2;
 
 	int n(0);
 	int r(0);
-	//#pragma omp parallel for collapse(2)
+	#pragma omp parallel for collapse(2)
 	for (int y = 0; y < m_height; y++)
 	{
 		int Y = y * step + yoff;
@@ -273,7 +273,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 			}
 			if (storeind != oind)
 			{
-				double* seed = seeds+storeind*5;
+				double* seed = seeds+n*5;
 				double* labval = m_labvec + storeind*3;
 				seed[3] = storeind % m_width;
 				seed[4] = storeind / m_width;
@@ -290,6 +290,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 			}
 		}
 	}
+	return n;
 }
 
 //===========================================================================
@@ -656,13 +657,13 @@ void SLIC::PerformSLICO_ForGivenK(
 //w	vector<double> edgemag(0);
 //	if (perturbseeds)
 //		DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
-	GetLABXYSeeds_ForGivenK(seeds, K, perturbseeds);
+	int numseed = GetLABXYSeeds_ForGivenK(seeds, K, perturbseeds);
 
 	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
-	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, STEP, 10, K);
-	numlabels=K;
+	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, STEP, 10, numseed);
+	//numlabels=K;
 	int *nlabels = new int[sz];
-	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
+	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numseed, K);
 	{
 		for (int i = 0; i < sz; i++)
 			klabels[i] = nlabels[i];
