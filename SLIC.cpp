@@ -257,7 +257,6 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		//------
 
 		distvec.assign(sz, DBL_MAX);
-		#pragma omp parallel for
 		for (int n = 0; n < numk; n++)
 		{
 			int y1 = max(0, (int)(kseedsy[n] - offset));
@@ -305,7 +304,6 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 			maxxy.assign(numk, 1);
 		}
 		{
-			#pragma omp parallel for
 			for (int i = 0; i < sz; i++)
 			{
 				if (maxlab[klabels[i]] < distlab[i])
@@ -323,10 +321,10 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		sigmax.assign(numk, 0);
 		sigmay.assign(numk, 0);
 		clustersize.assign(numk, 0);
-		#pragma omp parallel for
+
 		for (int j = 0; j < sz; j++)
 		{
-			// int temp = klabels[j];
+			int temp = klabels[j];
 			//_ASSERT(klabels[j] >= 0);
 			sigmal[klabels[j]] += m_lvec[j];
 			sigmaa[klabels[j]] += m_avec[j];
@@ -338,7 +336,6 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		}
 
 		{
-			#pragma omp parallel for
 			for (int k = 0; k < numk; k++)
 			{
 				//_ASSERT(clustersize[k] > 0);
@@ -349,7 +346,6 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		}
 
 		{
-			#pragma omp parallel for
 			for (int k = 0; k < numk; k++)
 			{
 				kseedsl[k] = sigmal[k] * inv[k];
