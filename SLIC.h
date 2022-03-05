@@ -6,6 +6,9 @@
 #include <algorithm>
 using namespace std;
 
+#define REDUCE_NUM_THREADS 256
+#define OMP_NUM_THREADS 256
+
 class SLIC
 {
 public:
@@ -39,12 +42,13 @@ private:
 	// SLICO (SLIC Zero) varies only M dynamicaly, not S.
 	//============================================================================
 	void PerformSuperpixelSegmentation_VariableSandM(
-		vector<double> &kseedsl,
-		vector<double> &kseedsa,
-		vector<double> &kseedsb,
-		vector<double> &kseedsx,
-		vector<double> &kseedsy,
+		double* kseedsl,
+		double* kseedsa,
+		double* kseedsb,
+		double* kseedsx,
+		double* kseedsy,
 		int *klabels,
+		const int numk,
 		const int &STEP,
 		const int &NUMITR);
 
@@ -55,12 +59,13 @@ private:
 	// Pick seeds for superpixels when number of superpixels is input.
 	//============================================================================
 	void GetLABXYSeeds_ForGivenK(
-		vector<double> &kseedsl,
-		vector<double> &kseedsa,
-		vector<double> &kseedsb,
-		vector<double> &kseedsx,
-		vector<double> &kseedsy,
-		const int &STEP,
+		double* kseedsl,
+		double* kseedsa,
+		double* kseedsb,
+		double* kseedsx,
+		double* kseedsy,
+		int& numk,
+		const int &K,
 		const bool &perturbseeds);
 
 

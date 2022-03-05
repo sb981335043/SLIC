@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <fstream>
 #include "SLIC.h"
@@ -126,21 +128,23 @@ double SLIC::DetectLABPixelEdge(
 /// The k seed values are taken as uniform spatial pixel samples.
 //===========================================================================
 void SLIC::GetLABXYSeeds_ForGivenK(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
+	double* kseedsl,
+	double* kseedsa,
+	double* kseedsb,
+	double* kseedsx,
+	double* kseedsy,
+	int& numk,
 	const int &K,
 	const bool &perturbseeds)
 {
+
 	int sz = m_width * m_height;
 	double step = sqrt(double(sz) / double(K));
 	int T = step;
 	int xoff = step / 2;
 	int yoff = step / 2;
 
-	 int n(0);
+	//  int n(0);
 	 int r(0);
 
 	for (int y = 0; y < m_height; y++)
@@ -157,12 +161,13 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 				break;
 
 			int i = Y * m_width + X;
-			kseedsl.push_back(m_lvec[i]);
-			kseedsa.push_back(m_avec[i]);
-			kseedsb.push_back(m_bvec[i]);
-			kseedsx.push_back(X);
-			kseedsy.push_back(Y);
-			n++;
+			kseedsl[numk]=m_lvec[i];
+			kseedsa[numk]=m_avec[i];
+			kseedsb[numk]=m_bvec[i];
+			kseedsx[numk]=X;
+			kseedsy[numk]=Y;
+			++numk;
+			// n++;
 		}
 		 r++;
 	}
@@ -171,9 +176,8 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	{
 		const int dx8[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
 		const int dy8[8] = {0, -1, -1, -1, 0, 1, 1, 1};
-		int numseeds = kseedsl.size();
 		#pragma omp parallel for
-		for (int n = 0; n < numseeds; n++)
+		for (int n = 0; n < numk; n++)
 		{
 			int ox = kseedsx[n]; //original x
 			int oy = kseedsy[n]; //original y
@@ -209,17 +213,18 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 }
 
 void SLIC::PerformSuperpixelSegmentation_VariableSandM(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
+	double* kseedsl,
+	double* kseedsa,
+	double* kseedsb,
+	double* kseedsx,
+	double* kseedsy,
 	int *klabels,
+	const int numk, 
 	const int &STEP,
 	const int &NUMITR)
 {
 	int sz = m_width * m_height;
-	const int numk = kseedsl.size();
+	//const int numk = kseedsl.size();
 	//double cumerr(99999.9);
 	int numitr(0);
 
@@ -521,21 +526,30 @@ void SLIC::PerformSLICO_ForGivenK(
 	const int &K,	 //required number of superpixels
 	const double &m) //weight given to spatial distance
 {
-	vector<double> kseedsl(0);
-	vector<double> kseedsa(0);
-	vector<double> kseedsb(0);
-	vector<double> kseedsx(0);
-	vector<double> kseedsy(0);
-
 	//--------------------------------------------------
 	m_width = width;
 	m_height = height;
 	int sz = m_width * m_height;
 	//--------------------------------------------------
-	//if(0 == klabels) klabels = new int[sz];
-	for (int s = 0; s < sz; s++)
-		klabels[s] = -1;
-	//--------------------------------------------------
+
+	//-------------------------------------
+	memset(klabels, -1, sizeof(int) * sz);
+	double step = sqrt(double(sz) / double(K));
+	//-------------------------------------
+    double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
+    kseedsl = (double*)_mm_malloc(
+        (m_width / step + 1) * (m_height / step + 1) * sizeof(double), 256);
+    kseedsa = (double*)_mm_malloc(
+        (m_width / step + 1) * (m_height / step + 1) * sizeof(double), 256);
+    kseedsb = (double*)_mm_malloc(
+        (m_width / step + 1) * (m_height / step + 1) * sizeof(double), 256);
+    kseedsx = (double*)_mm_malloc(
+        (m_width / step + 1) * (m_height / step + 1) * sizeof(double), 256);
+    kseedsy = (double*)_mm_malloc(
+        (m_width / step + 1) * (m_height / step + 1) * sizeof(double), 256);
+
+
+
 	if (1) //LAB
 	{
 		DoRGBtoLABConversion(ubuff, m_lvec, m_avec, m_bvec);
@@ -559,11 +573,18 @@ void SLIC::PerformSLICO_ForGivenK(
 	bool perturbseeds(true);
 	// vector<double> edgemag(0);
 	// if(perturbseeds) DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
-	GetLABXYSeeds_ForGivenK(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, K, perturbseeds);
+	GetLABXYSeeds_ForGivenK(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy,
+							numlabels, K, perturbseeds);
 
 	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
-	PerformSuperpixelSegmentation_VariableSandM(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, klabels, STEP, 10);
-	numlabels = kseedsl.size();
+	PerformSuperpixelSegmentation_VariableSandM(kseedsl, kseedsa, kseedsb, kseedsx
+												, kseedsy, klabels, numlabels, STEP, 10);
+
+	_mm_free(kseedsl);
+    _mm_free(kseedsa);
+    _mm_free(kseedsb);
+    _mm_free(kseedsx);
+    _mm_free(kseedsy);
 
 	int *nlabels = new int[sz];
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
@@ -707,7 +728,7 @@ int main(int argc, char **argv)
 		return -1;
 
 	int sz = width * height;
-	int *labels = new int[sz];
+	int* labels = (int*)_mm_malloc(sz * sizeof(int), 256);
 	int numlabels(0);
 	SLIC slic;
 	int m_spcount;
