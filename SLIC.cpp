@@ -212,303 +212,6 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	}
 }
 
-// void SLIC::PerformSuperpixelSegmentation_VariableSandM(
-// 	double* kseedsl,
-// 	double* kseedsa,
-// 	double* kseedsb,
-// 	double* kseedsx,
-// 	double* kseedsy,
-// 	int *klabels,
-// 	const int numk, 
-// 	const int &STEP,
-// 	const int &NUMITR)
-// {
-// 	int sz = m_width * m_height;
-// 	//const int numk = kseedsl.size();
-// 	//double cumerr(99999.9);
-// 	int numitr(0);
-
-// 	//----------------
-// 	int offset = STEP;
-// 	if (STEP < 10)
-// 		offset = STEP * 1.5;
-// 	//----------------
-
-// 	vector<double> sigmal(numk, 0);
-// 	vector<double> sigmaa(numk, 0);
-// 	vector<double> sigmab(numk, 0);
-// 	vector<double> sigmax(numk, 0);
-// 	vector<double> sigmay(numk, 0);
-// 	vector<int> clustersize(numk, 0);
-// 	vector<double> inv(numk, 0); //to store 1/clustersize[k] values
-// //	vector<double> distxy(sz, DBL_MAX);
-// //	vector<double> distlab(sz, DBL_MAX);
-// 	double* distlab = (double*)_mm_malloc(sz * sizeof(double), 256);
-// 	#pragma omp parallel for
-//     for (int i = 0; i < sz; ++i) {
-//         // distxy[i] = DBL_MAX;
-//         distlab[i] = DBL_MAX;
-//     }
-
-// 	double* distvec = (double*)_mm_malloc(sz * sizeof(double), 256);
-	
-// 	vector<double> maxlab(numk, 10 * 10);	 //THIS IS THE VARIABLE VALUE OF M, just start with 10
-// 	// vector<double> maxxy(numk, STEP * STEP); //THIS IS THE VARIABLE VALUE OF M, just start with 10
-
-// 	double invxywt = 1.0 / (STEP * STEP); //NOTE: this is different from how usual SLIC/LKM works
-// 	//迭代10次
-
-// 	//-----------------------------------------------
-// 	 __m256d invxywt_vec = _mm256_set1_pd(invxywt);
-
-//     // vector<int> distidx(sz, -1);
-//     int* distidx = new int[sz];
-//     double* _maxlab[OMP_NUM_THREADS];
-//     // double* _maxxy[OMP_NUM_THREADS];
-//     double* _sigmal[OMP_NUM_THREADS];
-//     double* _sigmaa[OMP_NUM_THREADS];
-//     double* _sigmab[OMP_NUM_THREADS];
-//     double* _sigmax[OMP_NUM_THREADS];
-//     double* _sigmay[OMP_NUM_THREADS];
-//     int* _clustersize[OMP_NUM_THREADS];
-
-// // memset(distidx, 0, sizeof(int) * sz);
-// 	#pragma omp parallel for
-//     for (int i = 0; i < OMP_NUM_THREADS; ++i) {
-//         _maxlab[i] = new double[numk];
-//         // _maxxy[i] = new double[numk];
-//         _sigmal[i] = new double[numk];
-//         _sigmaa[i] = new double[numk];
-//         _sigmab[i] = new double[numk];
-//         _sigmax[i] = new double[numk];
-//         _sigmay[i] = new double[numk];
-//         _clustersize[i] = new int[numk];
-//     }
-// 	//-----------------------------------------------
-// 	while (numitr < NUMITR)
-// 	{
-// 		//------
-// 		//cumerr = 0;
-// 		numitr++;
-// 		//------
-		
-// 		for (int i = 0; i < sz; ++i) {
-//             distvec[i] = DBL_MAX;
-//         }
-// 		// not double max but large enough
-//         // memset(distvec,0x7F,sz*sizeof(double));
-// 		//遍历，算出每个点与seeds的最近距离进行分类
-//         for (int n = 0; n < numk; n++) {
-//             const double _kseedsl = kseedsl[n];
-//             __m256d _kseedsl_vec = _mm256_set1_pd(kseedsl[n]);
-//             const double _kseedsa = kseedsa[n];
-//             __m256d _kseedsa_vec = _mm256_set1_pd(kseedsa[n]);
-//             const double _kseedsb = kseedsb[n];
-//             __m256d _kseedsb_vec = _mm256_set1_pd(kseedsb[n]);
-//             const double _kseedsx = kseedsx[n];
-//             __m256d _kseedsx_vec = _mm256_set1_pd(kseedsx[n]);
-//             const double _kseedsy = kseedsy[n];
-//             __m256d _kseedsy_vec = _mm256_set1_pd(kseedsy[n]);
-//             __m256d maxlab_vec = _mm256_set1_pd(maxlab[n]);
-
-
-//             const int y1 = max(0, (int)(_kseedsy - offset));
-//             const int y2 = min(m_height, (int)(_kseedsy + offset));
-//             const int x1 = max(0, (int)(_kseedsx - offset));
-//             const int x2 = min(m_width, (int)(_kseedsx + offset));
-
-// 			#pragma omp parallel for
-//             for (int y = y1; y < y2; y++) {
-//                 double* res_unpack =
-//                     (double*)_mm_malloc(4 * sizeof(double), 256);
-//                 for (int x = x1; x < x2;) {
-//                     const int i = y * m_width + x;
-
-//                     if ((i & 0x3) != 0 || x + 4 > x2) {
-//                         // not aligned part
-//                         const double l = m_lvec[i];
-//                         const double a = m_avec[i];
-//                         const double b = m_bvec[i];
-
-//                         const double _distlab =
-//                             (l - _kseedsl) * (l - _kseedsl) +
-//                             (a - _kseedsa) * (a - _kseedsa) +
-//                             (b - _kseedsb) * (b - _kseedsb);
-
-//                         const double _distxy = (x - _kseedsx) * (x - _kseedsx) +
-//                                                (y - _kseedsy) * (y - _kseedsy);
-
-//                         //------------------------------------------------------------------------
-//                         const double dist =
-//                             _distlab / maxlab[n] +
-//                             _distxy * invxywt;              
-
-//                         distlab[i] = _distlab;
-
-//                         if (dist < distvec[i]) {
-//                             distvec[i] = dist;
-//                             klabels[i] = n;
-//                         }
-//                         ++x;
-//                     } else {
-//                         // aligned part
-//                         __m256d l_vec = _mm256_load_pd(&m_lvec[i]);
-//                         __m256d a_vec = _mm256_load_pd(&m_avec[i]);
-//                         __m256d b_vec = _mm256_load_pd(&m_bvec[i]);
-//                         __m256d x_vec =
-//                             _mm256_set_pd((double)(x + 3), (double)(x + 2),
-//                                           (double)(x + 1), (double)(x));
-//                         __m256d y_vec = _mm256_set1_pd((double)y);
-//                         __m256d l_vec_t1 = _mm256_sub_pd(l_vec, _kseedsl_vec);
-//                         l_vec_t1 = _mm256_mul_pd(l_vec_t1, l_vec_t1);
-//                         __m256d a_vec_t1 = _mm256_sub_pd(a_vec, _kseedsa_vec);
-//                         a_vec_t1 = _mm256_mul_pd(a_vec_t1, a_vec_t1);
-//                         __m256d b_vec_t1 = _mm256_sub_pd(b_vec, _kseedsb_vec);
-//                         b_vec_t1 = _mm256_mul_pd(b_vec_t1, b_vec_t1);
-//                         __m256d _distlab_vec =
-//                             _mm256_add_pd(l_vec_t1, a_vec_t1);
-//                         _distlab_vec = _mm256_add_pd(_distlab_vec, b_vec_t1);
-//                         __m256d x_vec_t1 = _mm256_sub_pd(x_vec, _kseedsx_vec);
-//                         x_vec_t1 = _mm256_mul_pd(x_vec_t1, x_vec_t1);
-//                         __m256d y_vec_t1 = _mm256_sub_pd(y_vec, _kseedsy_vec);
-//                         y_vec_t1 = _mm256_mul_pd(y_vec_t1, y_vec_t1);
-//                         __m256d _distxy_vec = _mm256_add_pd(x_vec_t1, y_vec_t1);
-//                         __m256d dist_vec_t1 =
-//                             _mm256_div_pd(_distlab_vec, maxlab_vec);
-//                         __m256d dist_vec_t2 =
-//                             _mm256_mul_pd(_distxy_vec, invxywt_vec);
-//                         __m256d dist_vec =
-//                             _mm256_add_pd(dist_vec_t1, dist_vec_t2);
-
-//                         _mm256_store_pd(&distlab[i], _distlab_vec);
-
-//                         __m256d distvec_vec = _mm256_load_pd(&distvec[i]);
-//                         __m256d cmp_res_vec =
-//                             _mm256_cmp_pd(dist_vec, distvec_vec, _CMP_LT_OQ);
-//                         distvec_vec = _mm256_blendv_pd(distvec_vec, dist_vec,
-//                                                        cmp_res_vec);
-//                         _mm256_store_pd(&distvec[i], distvec_vec);
-
-//                         __m256i permuted_vec = _mm256_permutevar8x32_epi32(
-//                             _mm256_castpd_si256(cmp_res_vec), K_PERM_VEC);
-//                         __m128i cmp_int_vec =
-//                             _mm256_castsi256_si128(permuted_vec);
-
-//                         __m128i n_vec = _mm_set1_epi32(n);
-//                         _mm_maskstore_epi32(&klabels[i], cmp_int_vec, n_vec);;
-//                         x += 4;
-//                     }
-//                 }
-//                 _mm_free(res_unpack);
-//             }
-//         }
-// 		#pragma omp parallel for
-//         for (int i = 0; i < OMP_NUM_THREADS; ++i) {
-//             memset(_maxlab[i], 0, sizeof(double) * numk);
-//         }
-// 		//-----------------------------------------------------------------
-// 		// Assign the max color distance for a cluster
-// 		//-----------------------------------------------------------------
-// 		#pragma omp parallel for
-//         for (int i = 0; i < sz; i++) {
-//             int idx = omp_get_thread_num();
-//             if (_maxlab[idx][klabels[i]] < distlab[i])
-//                 _maxlab[idx][klabels[i]] = distlab[i];
-//         }
-// 		#pragma omp parallel for
-//         for (int i = 0; i < numk; ++i)
-//             for (int j = 0; j < OMP_NUM_THREADS; ++j) {
-//                 if (maxlab[i] < _maxlab[j][i]) maxlab[i] = _maxlab[j][i];
-//             }
-
-// 		//-----------------------------------------------------------------
-// 		// Recalculate the centroid and store in the seed values
-// 		//-----------------------------------------------------------------
-// 		sigmal.assign(numk, 0);
-// 		sigmaa.assign(numk, 0);
-// 		sigmab.assign(numk, 0);
-// 		sigmax.assign(numk, 0);
-// 		sigmay.assign(numk, 0);
-// 		clustersize.assign(numk, 0);
-
-// 		#pragma omp parallel for
-//         for (int i = 0; i < OMP_NUM_THREADS; ++i) {
-//             memset(_sigmal[i], 0, sizeof(double) * numk);
-//             memset(_sigmaa[i], 0, sizeof(double) * numk);
-//             memset(_sigmab[i], 0, sizeof(double) * numk);
-//             memset(_sigmax[i], 0, sizeof(double) * numk);
-//             memset(_sigmay[i], 0, sizeof(double) * numk);
-//             memset(_clustersize[i], 0, sizeof(int) * numk);
-//         }
-		
-// 		//计算分类后一个label里所有的点的向量
-// 		#pragma omp parallel
-// 		{
-// 			int idx = omp_get_thread_num();
-// 			#pragma omp for
-// 			for (int j = 0; j < sz; j++) {
-
-// 				_sigmal[idx][klabels[j]] += m_lvec[j];
-// 				_sigmaa[idx][klabels[j]] += m_avec[j];
-// 				_sigmab[idx][klabels[j]] += m_bvec[j];
-// 				_sigmax[idx][klabels[j]] += (j % m_width);
-// 				_sigmay[idx][klabels[j]] += (j / m_width);
-
-// 				_clustersize[idx][klabels[j]]++;
-// 			}
-// 		}
-// 		#pragma omp parallel for
-// 		for (int i = 0; i < numk; ++i)
-// 		for (int j = 0; j < OMP_NUM_THREADS; ++j) {
-// 			sigmal[i] += _sigmal[j][i];
-// 			sigmaa[i] += _sigmaa[j][i];
-// 			sigmab[i] += _sigmab[j][i];
-// 			sigmax[i] += _sigmax[j][i];
-// 			sigmay[i] += _sigmay[j][i];
-// 			clustersize[i] += _clustersize[j][i];
-// 		}
-
-// 		#pragma omp parallel
-// 		{
-// 			#pragma omp for
-// 			for (int k = 0; k < numk; k++) {
-// 				//_ASSERT(clustersize[k] > 0);
-// 				if (clustersize[k] <= 0) clustersize[k] = 1;
-// 				inv[k] = 1.0 /
-// 						double(clustersize[k]);  // computing inverse now to
-// 												// multiply, than divide later
-// 			}
-// 		}
-
-// 		#pragma omp parallel
-// 		{
-// 			#pragma omp for
-// 			for (int k = 0; k < numk; k++) {
-// 				kseedsl[k] = sigmal[k] * inv[k];
-// 				kseedsa[k] = sigmaa[k] * inv[k];
-// 				kseedsb[k] = sigmab[k] * inv[k];
-// 				kseedsx[k] = sigmax[k] * inv[k];
-// 				kseedsy[k] = sigmay[k] * inv[k];
-// 			}
-// 		}
-// 	}
-// 	delete[] distidx;
-// 	#pragma omp parallel for
-// 	for (int i = 0; i < OMP_NUM_THREADS; ++i) {
-// 		delete[] _maxlab[i];
-// 		// delete[] _maxxy[i];
-// 		delete[] _sigmal[i];
-// 		delete[] _sigmaa[i];
-// 		delete[] _sigmab[i];
-// 		delete[] _sigmax[i];
-// 		delete[] _sigmay[i];
-// 		delete[] _clustersize[i];
-// 	}
-// 	_mm_free(distlab);
-// 	// _mm_free(distxy);
-// 	_mm_free(distvec);
-// 	//_mm_free(res_unpack);
-// }
 void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 	double* kseedsl,
 	double* kseedsa,
@@ -554,6 +257,7 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		//------
 
 		distvec.assign(sz, DBL_MAX);
+		#pragma omp parallel for
 		for (int n = 0; n < numk; n++)
 		{
 			int y1 = max(0, (int)(kseedsy[n] - offset));
@@ -601,6 +305,7 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 			maxxy.assign(numk, 1);
 		}
 		{
+			#pragma omp parallel for
 			for (int i = 0; i < sz; i++)
 			{
 				if (maxlab[klabels[i]] < distlab[i])
@@ -618,10 +323,10 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		sigmax.assign(numk, 0);
 		sigmay.assign(numk, 0);
 		clustersize.assign(numk, 0);
-
+		#pragma omp parallel for
 		for (int j = 0; j < sz; j++)
 		{
-			int temp = klabels[j];
+			// int temp = klabels[j];
 			//_ASSERT(klabels[j] >= 0);
 			sigmal[klabels[j]] += m_lvec[j];
 			sigmaa[klabels[j]] += m_avec[j];
@@ -633,6 +338,7 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		}
 
 		{
+			#pragma omp parallel for
 			for (int k = 0; k < numk; k++)
 			{
 				//_ASSERT(clustersize[k] > 0);
@@ -643,6 +349,7 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 		}
 
 		{
+			#pragma omp parallel for
 			for (int k = 0; k < numk; k++)
 			{
 				kseedsl[k] = sigmal[k] * inv[k];
