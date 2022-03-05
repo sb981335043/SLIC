@@ -5,7 +5,12 @@
 #include <fstream>
 #include "SLIC.h"
 #include <chrono>
+
+#include <emmintrin.h>
+#include <immintrin.h>
 #include <omp.h>
+#include <smmintrin.h>
+
 typedef chrono::high_resolution_clock Clock;
 
 int numThreads = 256;
@@ -34,12 +39,9 @@ SLIC::SLIC()
 
 SLIC::~SLIC()
 {
-	if (m_lvec)
-		delete[] m_lvec;
-	if (m_avec)
-		delete[] m_avec;
-	if (m_bvec)
-		delete[] m_bvec;
+    if (m_lvec) _mm_free(m_lvec);
+    if (m_avec) _mm_free(m_avec);
+    if (m_bvec) _mm_free(m_bvec);
 }
 
 
@@ -50,9 +52,9 @@ void SLIC::DoRGBtoLABConversion(
 	double *&bvec)
 {
 	int sz = m_width * m_height;
-	lvec = new double[sz];
-	avec = new double[sz];
-	bvec = new double[sz];
+    lvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+    avec = (double*)_mm_malloc(sz * sizeof(double), 256);
+    bvec = (double*)_mm_malloc(sz * sizeof(double), 256);
     //  建立查询表 利用向量化 加速计算
     double* tableRGB = new double[256]; //记得delete[]掉
     //#pragma omp simd 我觉得这里相比多发还是并行更好，因为浮点数的运算是64位，一个寄存器也就64位
@@ -351,6 +353,9 @@ void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 	}
 }
 
+
+
+
 //===========================================================================
 ///	SaveSuperpixelLabels2PGM
 ///
@@ -537,15 +542,17 @@ void SLIC::PerformSLICO_ForGivenK(
 	}
 	else //RGB
 	{
-		m_lvec = new double[sz];
-		m_avec = new double[sz];
-		m_bvec = new double[sz];
-		for (int i = 0; i < sz; i++)
-		{
-			m_lvec[i] = ubuff[i] >> 16 & 0xff;
-			m_avec[i] = ubuff[i] >> 8 & 0xff;
-			m_bvec[i] = ubuff[i] & 0xff;
-		}
+        // m_lvec = new double[sz];
+        // m_avec = new double[sz];
+        // m_bvec = new double[sz];
+        m_lvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+        m_avec = (double*)_mm_malloc(sz * sizeof(double), 256);
+        m_bvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+        for (int i = 0; i < sz; i++) {
+            m_lvec[i] = ubuff[i] >> 16 & 0xff;
+            m_avec[i] = ubuff[i] >> 8 & 0xff;
+            m_bvec[i] = ubuff[i] & 0xff;
+        }
 	}
 	//--------------------------------------------------
 
