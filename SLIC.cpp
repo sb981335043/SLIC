@@ -53,11 +53,11 @@ private:
 	// SLICO (SLIC Zero) varies only M dynamicaly, not S.
 	//============================================================================
 	void PerformSuperpixelSegmentation_VariableSandM(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
+		double* kseedsl,
+		double* kseedsa,
+		double* kseedsb,
+		double* kseedsx,
+		double* kseedsy,
 		int *klabels,
 		const int numk,
 		const int &STEP,
@@ -70,11 +70,11 @@ private:
 	// Pick seeds for superpixels when number of superpixels is input.
 	//============================================================================
 	void GetLABXYSeeds_ForGivenK(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
+		double* kseedsl,
+		double* kseedsa,
+		double* kseedsb,
+		double* kseedsx,
+		double* kseedsy,
 		int& numk,
 		const int &K,
 		const bool &perturbseeds);
@@ -139,9 +139,12 @@ SLIC::SLIC()
 
 SLIC::~SLIC()
 {
-    if (m_lvec) delete[] m_lvec;
-    if (m_avec) delete[] m_avec;
-    if (m_bvec) delete[] m_bvec;
+	if (m_lvec) _mm_free(m_lvec);
+	if (m_avec) _mm_free(m_avec);
+	if (m_bvec) _mm_free(m_bvec);
+	// if (m_lvec) delete[] m_lvec;
+	// if (m_avec) delete[] m_avec;
+	// if (m_bvec) delete[] m_bvec;
 }
 
 
@@ -152,9 +155,12 @@ void SLIC::DoRGBtoLABConversion(
 	double *&bvec)
 {
 	int sz = m_width * m_height;
-    lvec = new double[sz];
-    avec = new double[sz];
-    bvec = new double[sz];
+	// m_lvec = new double[sz];
+	// m_avec = new double[sz];
+	// m_bvec = new double[sz];
+	m_lvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+	m_avec = (double*)_mm_malloc(sz * sizeof(double), 256);
+	m_bvec = (double*)_mm_malloc(sz * sizeof(double), 256);
     //  建立查询表 利用向量化 加速计算
     double* tableRGB = new double[256]; //记得delete[]掉
     //#pragma omp simd 我觉得这里相比多发还是并行更好，因为浮点数的运算是64位，一个寄存器也就64位
@@ -223,11 +229,11 @@ double SLIC::DetectLABPixelEdge(
 /// The k seed values are taken as uniform spatial pixel samples.
 //===========================================================================
 void SLIC::GetLABXYSeeds_ForGivenK(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
+	double* kseedsl,
+	double* kseedsa,
+	double* kseedsb,
+	double* kseedsx,
+	double* kseedsy,
 	int& numk,
 	const int &K,
 	const bool &perturbseeds)
@@ -308,11 +314,11 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 }
 
 void SLIC::PerformSuperpixelSegmentation_VariableSandM(
-	vector<double> &kseedsl,
-	vector<double> &kseedsa,
-	vector<double> &kseedsb,
-	vector<double> &kseedsx,
-	vector<double> &kseedsy,
+	double* kseedsl,
+	double* kseedsa,
+	double* kseedsb,
+	double* kseedsx,
+	double* kseedsy,
 	int *klabels,
 	const int numk,
 	const int &STEP,
@@ -628,11 +634,15 @@ void SLIC::PerformSLICO_ForGivenK(
 	//-------------------------------------
 	memset(klabels, -1, sizeof(int) * sz);
 	double step = sqrt(double(sz) / double(K));
-	vector<double> kseedsl(0);
-	vector<double> kseedsa(0);
-	vector<double> kseedsb(0);
-	vector<double> kseedsx(0);
-	vector<double> kseedsy(0);
+	int num = (m_width / step + 1) * (m_height / step + 1); 
+	//-------------------------------------
+    // double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
+    double* kseedsl = new double[num];
+    double* kseedsa = new double[num];
+    double* kseedsb = new double[num];
+    double* kseedsx = new double[num];
+    double* kseedsy = new double[num];
+
 
 
 	if (1) //LAB
