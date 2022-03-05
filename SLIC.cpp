@@ -831,12 +831,12 @@ void SLIC::PerformSLICO_ForGivenK(
 	memset(klabels, -1, sizeof(int) * sz);
 	double step = sqrt(double(sz) / double(K));
 	//-------------------------------------
-    double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
-    kseedsl = new double[K];
-    kseedsa = new double[K];
-    kseedsb = new double[K];
-    kseedsx = new double[K];
-    kseedsy = new double[K];
+    // double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
+    double* kseedsl = new double[K];
+    double* kseedsa = new double[K];
+    double* kseedsb = new double[K];
+    double* kseedsx = new double[K];
+    double* kseedsy = new double[K];
 
 
 
@@ -876,13 +876,13 @@ void SLIC::PerformSLICO_ForGivenK(
     delete[] kseedsx;
     delete[] kseedsy;
 
-	int *nlabels =(int*)_mm_malloc(sz * sizeof(int), 256);
+	int *nlabels =new int[sz];
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
 	{
 		memcpy(klabels, nlabels, sizeof(int) * sz);
 	}
 	if (nlabels)
-		_mm_free(nlabels);
+		delete[] (nlabels);
 }
 
 //===========================================================================
@@ -1017,7 +1017,7 @@ int main(int argc, char **argv)
 		return -1;
 
 	int sz = width * height;
-	int* labels = (int*)_mm_malloc(sz * sizeof(int), 256);
+	int* labels = new int[sz];
 	int numlabels(0);
 	SLIC slic;
 	int m_spcount;
@@ -1047,7 +1047,7 @@ int main(int argc, char **argv)
 
 	slic.SaveSuperpixelLabels2PPM((char *)"output_labels.ppm", labels, width, height);
 	if (labels)
-		_mm_free(labels);
+		delete[] labels;
 
 	if (img)
 		delete[] img;
