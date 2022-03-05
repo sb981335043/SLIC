@@ -586,14 +586,13 @@ void SLIC::PerformSLICO_ForGivenK(
     _mm_free(kseedsx);
     _mm_free(kseedsy);
 
-	int *nlabels = new int[sz];
+	int *nlabels =(int*)_mm_malloc(sz * sizeof(int), 256);
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
 	{
-		for (int i = 0; i < sz; i++)
-			klabels[i] = nlabels[i];
+		memcpy(klabels, nlabels, sizeof(int) * sz);
 	}
 	if (nlabels)
-		delete[] nlabels;
+		_mm_free(nlabels);
 }
 
 //===========================================================================
@@ -758,7 +757,7 @@ int main(int argc, char **argv)
 
 	slic.SaveSuperpixelLabels2PPM((char *)"output_labels.ppm", labels, width, height);
 	if (labels)
-		delete[] labels;
+		_mm_free(labels);
 
 	if (img)
 		delete[] img;
