@@ -48,15 +48,9 @@ private:
 		const int &STEP,
 		const int &NUMITR);
 
-	void DetectLabEdges(
-		const double*				lvec,
-		const double*				avec,
-		const double*				bvec,
-		const int&					width,
-		const int&					height,
-		vector<double>&				edges);
-
-
+	// 计算单个点的梯度，对于一个初始seed计算周围八个点即可
+	double DetectLABPixelEdge(
+		const int &i);
 	//============================================================================
 	// Pick seeds for superpixels when number of superpixels is input.
 	//============================================================================
@@ -67,8 +61,7 @@ private:
 		vector<double> &kseedsx,
 		vector<double> &kseedsy,
 		const int &STEP,
-		const bool &perturbseeds,
-		const vector<double> &edges);
+		const bool &perturbseeds);
 
 
 	//============================================================================

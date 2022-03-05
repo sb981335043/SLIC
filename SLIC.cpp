@@ -98,44 +98,23 @@ void SLIC::DoRGBtoLABConversion(
 	delete[] tableRGB;
 }
 
-//==============================================================================
-///	DetectLabEdges
-//==============================================================================
-void SLIC::DetectLabEdges(
-	const double*				lvec,
-	const double*				avec,
-	const double*				bvec,
-	const int&					width,
-	const int&					height,
-	vector<double>&				edges)
+// 计算单个点的梯度，对于一个初始seed计算周围八个点即可
+double SLIC::DetectLABPixelEdge(
+	const int &i)
 {
-	int sz = width*height;
+	const double *lvec = m_lvec;
+	const double *avec = m_avec;
+	const double *bvec = m_bvec;
+	const int width = m_width;
 
-	edges.resize(sz,0);
-	int start = 1 * width + 1;
-	int end = (height-2) * width + width - 2;
-	#pragma omp parallel for num_threads(numThreads) ////schedule(dynamic)
-	//#pragma ivdep
-	for(int i = start; i < end; i++){
-	//for( int j = 1; j < height-1; j++ )
-	//{
-	//	for( int k = 1; k < width-1; k++ )
-	//	{
-	//		int i = j*width+k;
+	double dx = (lvec[i - 1] - lvec[i + 1]) * (lvec[i - 1] - lvec[i + 1]) +
+				(avec[i - 1] - avec[i + 1]) * (avec[i - 1] - avec[i + 1]) +
+				(bvec[i - 1] - bvec[i + 1]) * (bvec[i - 1] - bvec[i + 1]);
 
-			double dx = (lvec[i-1] - lvec[i+1]) * (lvec[i-1] - lvec[i+1]) +
-						(avec[i-1] - avec[i+1]) * (avec[i-1] - avec[i+1]) +
-						(bvec[i-1] - bvec[i+1]) * (bvec[i-1] - bvec[i+1]);
-
-			double dy = (lvec[i-width] - lvec[i+width]) * (lvec[i-width] - lvec[i+width]) +
-						(avec[i-width] - avec[i+width]) * (avec[i-width] - avec[i+width]) +
-						(bvec[i-width] - bvec[i+width]) * (bvec[i-width] - bvec[i+width]);
-
-			//edges[i] = (sqrt(dx) + sqrt(dy));
-			edges[i] = (dx + dy);
-	//	}
-	//}
-	}
+	double dy = (lvec[i - width] - lvec[i + width]) * (lvec[i - width] - lvec[i + width]) +
+				(avec[i - width] - avec[i + width]) * (avec[i - width] - avec[i + width]) +
+				(bvec[i - width] - bvec[i + width]) * (bvec[i - width] - bvec[i + width]);
+	return dx + dy;
 }
 
 
@@ -151,8 +130,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	vector<double> &kseedsx,
 	vector<double> &kseedsy,
 	const int &K,
-	const bool &perturbseeds,
-	const vector<double> &edges)
+	const bool &perturbseeds)
 {
 	int sz = m_width * m_height;
 	double step = sqrt(double(sz) / double(K));
@@ -177,14 +155,6 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 				break;
 
 			int i = Y * m_width + X;
-
-			//_ASSERT(n < K);
-
-			//kseedsl[n] = m_lvec[i];
-			//kseedsa[n] = m_avec[i];
-			//kseedsb[n] = m_bvec[i];
-			//kseedsx[n] = X;
-			//kseedsy[n] = Y;
 			kseedsl.push_back(m_lvec[i]);
 			kseedsa.push_back(m_avec[i]);
 			kseedsb.push_back(m_bvec[i]);
@@ -207,6 +177,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 			int oy = kseedsy[n]; //original y
 			int oind = oy * m_width + ox;
 			int storeind = oind;
+			double minn = DetectLABPixelEdge(storeind);
 			for (int i = 0; i < 8; i++)
 			{
 				int nx = ox + dx8[i]; //new x
@@ -215,9 +186,11 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 				if (nx >= 0 && nx < m_width && ny >= 0 && ny < m_height)
 				{
 					int nind = ny * m_width + nx;
-					if (edges[nind] < edges[storeind])
+					double test = DetectLABPixelEdge(nind);
+					if ( test < minn)
 					{
 						storeind = nind;
+						minn = test;
 					}
 				}
 			}
@@ -233,24 +206,6 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	}
 }
 
-//===========================================================================
-///	PerformSuperpixelSegmentation_VariableSandM
-///
-///	Magic SLIC - no parameters
-///
-///	Performs k mean segmentation. It is fast because it looks locally, not
-/// over the entire image.
-/// This function picks the maximum value of color distance as compact factor
-/// M and maximum pixel distance as grid step size S from each cluster (13 April 2011).
-/// So no need to input a constant value of M and S. There are two clear
-/// advantages:
-///
-/// [1] The algorithm now better handles both textured and non-textured regions
-/// [2] There is not need to set any parameters!!!
-///
-/// SLICO (or SLIC Zero) dynamically varies only the compactness factor S,
-/// not the step size S.
-//===========================================================================
 void SLIC::PerformSuperpixelSegmentation_VariableSandM(
 	vector<double> &kseedsl,
 	vector<double> &kseedsa,
@@ -595,9 +550,9 @@ void SLIC::PerformSLICO_ForGivenK(
 	//--------------------------------------------------
 
 	bool perturbseeds(true);
-	vector<double> edgemag(0);
-	if(perturbseeds) DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
-	GetLABXYSeeds_ForGivenK(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, K, perturbseeds, edgemag);
+	// vector<double> edgemag(0);
+	// if(perturbseeds) DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
+	GetLABXYSeeds_ForGivenK(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, K, perturbseeds);
 
 	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
 	PerformSuperpixelSegmentation_VariableSandM(kseedsl, kseedsa, kseedsb, kseedsx, kseedsy, klabels, STEP, 10);
