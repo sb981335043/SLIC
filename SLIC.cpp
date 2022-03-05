@@ -5,13 +5,111 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
-#include "SLIC.h"
 #include <chrono>
+#include <vector>
+#include <string>
+#include <algorithm>
 
 #include <emmintrin.h>
 #include <immintrin.h>
 #include <omp.h>
 #include <smmintrin.h>
+
+
+using namespace std;
+
+#define OMP_NUM_THREADS 256
+
+class SLIC
+{
+public:
+	SLIC();
+	virtual ~SLIC();
+
+	//============================================================================
+	// Superpixel segmentation for a given number of superpixels	输入
+	//============================================================================
+	void PerformSLICO_ForGivenK(
+		const unsigned int *ubuff, //Each 32 bit unsigned int contains ARGB pixel values.
+		const int width,
+		const int height,
+		int *klabels,
+		int &numlabels,
+		const int &K,
+		const double &m);
+
+	//============================================================================
+	// Save superpixel labels to pgm in raster scan order	保存聚类标记
+	//============================================================================
+	void SaveSuperpixelLabels2PPM(
+		char *filename,
+		int *labels,
+		const int width,
+		const int height);
+
+private:
+	//============================================================================
+	// Magic SLIC. No need to set M (compactness factor) and S (step size). #两种模式
+	// SLICO (SLIC Zero) varies only M dynamicaly, not S.
+	//============================================================================
+	void PerformSuperpixelSegmentation_VariableSandM(
+	vector<double> &kseedsl,
+	vector<double> &kseedsa,
+	vector<double> &kseedsb,
+	vector<double> &kseedsx,
+	vector<double> &kseedsy,
+		int *klabels,
+		const int numk,
+		const int &STEP,
+		const int &NUMITR);
+
+	// 计算单个点的梯度，对于一个初始seed计算周围八个点即可
+	double DetectLABPixelEdge(
+		const int &i);
+	//============================================================================
+	// Pick seeds for superpixels when number of superpixels is input.
+	//============================================================================
+	void GetLABXYSeeds_ForGivenK(
+	vector<double> &kseedsl,
+	vector<double> &kseedsa,
+	vector<double> &kseedsb,
+	vector<double> &kseedsx,
+	vector<double> &kseedsy,
+		int& numk,
+		const int &K,
+		const bool &perturbseeds);
+
+
+	//============================================================================
+	// sRGB to CIELAB conversion for 2-D images
+	//============================================================================
+	void DoRGBtoLABConversion(
+		const unsigned int *&ubuff,
+		double *&lvec,
+		double *&avec,
+		double *&bvec);
+
+	//============================================================================
+	// Post-processing of SLIC segmentation, to avoid stray labels.
+	//============================================================================
+	void EnforceLabelConnectivity(
+		const int *labels,
+		const int &width,
+		const int &height,
+		int *nlabels,	//input labels that need to be corrected to remove stray labels
+		int &numlabels, //the number of labels changes in the end if segments are removed
+		const int &K);	//the number of superpixels desired by the user
+
+private:
+	int m_width;
+	int m_height;
+	int m_depth;
+
+	double *m_lvec;
+	double *m_avec;
+	double *m_bvec;
+};
+
 
 typedef chrono::high_resolution_clock Clock;
 
@@ -87,12 +185,9 @@ void SLIC::DoRGBtoLABConversion(
 		double Z = r0 * 0.0193339 + g0 * 0.1191920 + b0 * 0.9503041;
 
 		double fx, fy, fz;
-		if (X > 0.008417238336) fx = cbrt(X * (1.0 / 0.950456));
-		else fx = (8.192982069151272 * X + 0.1379310344827586);
-		if (Y > 0.008856) fy = cbrt(Y);
-		else fy = (7.787068965517241 * Y + 0.1379310344827586);
-		if (Z > 0.009642005424) fz = cbrt(Z * (1.0 / 1.088754));
-		else fz = (7.152275872710678 * Z + 0.1379310344827586);
+		fx = X > 0.008417238336 ? cbrt(X * (1.0 / 0.950456)):(8.192982069151272 * X + 0.1379310344827586);
+		fy = Y > 0.008856 ? fy = cbrt(Y): (7.787068965517241 * Y + 0.1379310344827586);
+		fz = Z > 0.009642005424 ? cbrt(Z * (1.0 / 1.088754)): (7.152275872710678 * Z + 0.1379310344827586);
 		//这里通过
 
 		lvec[j] = 116.0 * fy - 16.0;
@@ -128,11 +223,11 @@ double SLIC::DetectLABPixelEdge(
 /// The k seed values are taken as uniform spatial pixel samples.
 //===========================================================================
 void SLIC::GetLABXYSeeds_ForGivenK(
-	double* kseedsl,
-	double* kseedsa,
-	double* kseedsb,
-	double* kseedsx,
-	double* kseedsy,
+	vector<double> &kseedsl,
+	vector<double> &kseedsa,
+	vector<double> &kseedsb,
+	vector<double> &kseedsx,
+	vector<double> &kseedsy,
 	int& numk,
 	const int &K,
 	const bool &perturbseeds)
@@ -213,11 +308,11 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 }
 
 void SLIC::PerformSuperpixelSegmentation_VariableSandM(
-	double* kseedsl,
-	double* kseedsa,
-	double* kseedsb,
-	double* kseedsx,
-	double* kseedsy,
+	vector<double> &kseedsl,
+	vector<double> &kseedsa,
+	vector<double> &kseedsb,
+	vector<double> &kseedsx,
+	vector<double> &kseedsy,
 	int *klabels,
 	const int numk,
 	const int &STEP,
@@ -533,15 +628,11 @@ void SLIC::PerformSLICO_ForGivenK(
 	//-------------------------------------
 	memset(klabels, -1, sizeof(int) * sz);
 	double step = sqrt(double(sz) / double(K));
-	int num = (m_width / step + 1) * (m_height / step + 1); 
-	//-------------------------------------
-    // double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
-    double* kseedsl = new double[num];
-    double* kseedsa = new double[num];
-    double* kseedsb = new double[num];
-    double* kseedsx = new double[num];
-    double* kseedsy = new double[num];
-
+	vector<double> kseedsl(0);
+	vector<double> kseedsa(0);
+	vector<double> kseedsb(0);
+	vector<double> kseedsx(0);
+	vector<double> kseedsy(0);
 
 
 	if (1) //LAB
