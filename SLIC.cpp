@@ -54,9 +54,9 @@ void SLIC::DoRGBtoLABConversion(
 	double *&bvec)
 {
 	int sz = m_width * m_height;
-    lvec = (double*)_mm_malloc(sz * sizeof(double), 256);
-    avec = (double*)_mm_malloc(sz * sizeof(double), 256);
-    bvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+    lvec = new double[sz];
+    avec = new double[sz];
+    bvec = new double[sz];
     //  建立查询表 利用向量化 加速计算
     double* tableRGB = new double[256]; //记得delete[]掉
     //#pragma omp simd 我觉得这里相比多发还是并行更好，因为浮点数的运算是64位，一个寄存器也就64位
@@ -830,13 +830,14 @@ void SLIC::PerformSLICO_ForGivenK(
 	//-------------------------------------
 	memset(klabels, -1, sizeof(int) * sz);
 	double step = sqrt(double(sz) / double(K));
+	int num = (m_width / step + 1) * (m_height / step + 1); 
 	//-------------------------------------
     // double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
-    double* kseedsl = new double[K];
-    double* kseedsa = new double[K];
-    double* kseedsb = new double[K];
-    double* kseedsx = new double[K];
-    double* kseedsy = new double[K];
+    double* kseedsl = new double[num];
+    double* kseedsa = new double[num];
+    double* kseedsb = new double[num];
+    double* kseedsx = new double[num];
+    double* kseedsy = new double[num];
 
 
 
@@ -870,11 +871,11 @@ void SLIC::PerformSLICO_ForGivenK(
 	PerformSuperpixelSegmentation_VariableSandM(kseedsl, kseedsa, kseedsb, kseedsx
 												, kseedsy, klabels, numlabels, STEP, 10);
 
-	delete[] kseedsl;
-    delete[] kseedsa;
-    delete[] kseedsb;
-    delete[] kseedsx;
-    delete[] kseedsy;
+	// delete[] kseedsl;
+    // delete[] kseedsa;
+    // delete[] kseedsb;
+    // delete[] kseedsx;
+    // delete[] kseedsy;
 
 	int *nlabels =new int[sz];
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
