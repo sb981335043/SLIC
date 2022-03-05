@@ -18,8 +18,8 @@
 
 using namespace std;
 
-#define OMP_NUM_THREADS 256
-
+#define OMP_NUM_THREADS 16
+const int THREAD = 16;
 inline double square(double x)
 {
 	return x*x;
@@ -60,12 +60,12 @@ private:
 	// Magic SLIC. No need to set M (compactness factor) and S (step size). #两种模式
 	// SLICO (SLIC Zero) varies only M dynamicaly, not S.
 	//============================================================================
-	void PerformSuperpixelSegmentation_VariableSandM(
-		double* seeds,
-		int *klabels,
-		const int numk,
-		const int &STEP,
-		const int &NUMITR);
+	// void PerformSuperpixelSegmentation_VariableSandM(
+	// 	double* seeds,
+	// 	int *klabels,
+	// 	const int numk,
+	// 	const int &STEP,
+	// 	const int &NUMITR);
 
 	// 计算单个点的梯度，对于一个初始seed计算周围八个点即可
 	double DetectLABPixelEdge(
@@ -173,12 +173,14 @@ void SLIC::DoRGBtoLABConversion(
     for (int i = 11; i < 256; ++i) {
         tableRGB[i] = pow((i * (1.0 / 269.025) + 0.0521327014218009), 2.4);
     }
+	// for(int i= 0 ; i<256;++i) cout<<tableRGB[i];
 	#pragma omp parallel for
 	for (int j = 0; j < sz; j++)
 	{
 		int r = (ubuff[j] >> 16) & 0xFF;
 		int g = (ubuff[j] >> 8) & 0xFF;
 		int b = (ubuff[j]) & 0xFF;
+		// cout<<r<<" "<<g<<" "<<b<<endl;
 		double* labval = labvec + 3*j;
 		
 		//RGB2XYZ(sR, sG, sB, X, Y, Z);
@@ -197,9 +199,9 @@ void SLIC::DoRGBtoLABConversion(
 		fz = Z > 0.009642005424 ? cbrt(Z * (1.0 / 1.088754)): (7.152275872710678 * Z + 0.1379310344827586);
 		//这里通过
 
-		labvec[2] = 116.0 * fy - 16.0;
-		labvec[1] = 500.0 * (fx - fy);
-		labvec[0] = 200.0 * (fy - fz);
+		labval[2] = 116.0 * fy - 16.0;
+		labval[1] = 500.0 * (fx - fy);
+		labval[0] = 200.0 * (fy - fz);
 	}
 	delete[] tableRGB;
 }
@@ -335,7 +337,6 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong) 
 {
    const int TIME = 10;//迭代次数
-   const int THREAD = 16;
    const int STEP = (int) (sqrt((double) (sz) / (double) (K)) + 2.0);
    int offset = STEP;
    if (STEP < 10) offset = (int) (STEP * 1.5);
@@ -365,11 +366,11 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
        memset(max_lab_t, 0, N * THREAD * sizeof(double));
        memset(sigma, 0, 5 * N * THREAD * sizeof(double));
        //遍历所有seed,计算最近的靠近位置
-#pragma omp parallel for default(none) shared(height, width, N, offset, t, seeds, lab, belong, inv_xy, max_lab_t, max_lab_div, sigma, cluster_size) schedule(guided, 10)
+	#pragma omp parallel for default(none) shared(height, width, N, offset, t, seeds, lab, belong, inv_xy, max_lab_t, max_lab_div, sigma, cluster_size) schedule(guided, 10)
        for (int y = 0; y < height; ++y) {
            double dis_vec_y[width] __attribute__((aligned(32)));
            double dis_lab_y[width] __attribute__((aligned(32)));
-           memset(dis_vec_y, 127 , width * sizeof(double));
+           memset(dis_vec_y, 0x43 , width * sizeof(double));
            const int y_index = y * width;
            for (int n = 0; n < N; n++) {
                double *seed = seeds + 5 * n;
@@ -435,148 +436,6 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
       }
   }
 }
-
-// void SLIC::PerformSuperpixelSegmentation_VariableSandM(
-// 	double* seeds,
-// 	int *klabels,
-// 	const int numk,
-// 	const int &STEP,
-// 	const int &NUMITR)
-// {
-// 	int sz = m_width * m_height;
-// 	// const int numk = kseedsl.size();
-// 	//double cumerr(99999.9);
-// 	int numitr(0);
-
-// 	//----------------
-// 	int offset = STEP;
-// 	if (STEP < 10)
-// 		offset = STEP * 1.5;
-// 	//----------------
-
-// 	vector<double> sigmal(numk, 0);
-// 	vector<double> sigmaa(numk, 0);
-// 	vector<double> sigmab(numk, 0);
-// 	vector<double> sigmax(numk, 0);
-// 	vector<double> sigmay(numk, 0);
-// 	vector<int> clustersize(numk, 0);
-// 	vector<double> inv(numk, 0); //to store 1/clustersize[k] values
-// 	vector<double> distxy(sz, DBL_MAX);
-// 	vector<double> distlab(sz, DBL_MAX);
-// 	vector<double> distvec(sz, DBL_MAX);
-// 	vector<double> maxlab(numk, 10 * 10);	 //THIS IS THE VARIABLE VALUE OF M, just start with 10
-// 	vector<double> maxxy(numk, STEP * STEP); //THIS IS THE VARIABLE VALUE OF M, just start with 10
-
-// 	double invxywt = 1.0 / (STEP * STEP); //NOTE: this is different from how usual SLIC/LKM works
-
-// 	while (numitr < NUMITR)
-// 	{
-// 		//------
-// 		//cumerr = 0;
-// 		numitr++;
-// 		//------
-
-// 		distvec.assign(sz, DBL_MAX);
-// 		for (int n = 0; n < numk; n++)
-// 		{
-// 			int y1 = max(0, (int)(kseedsy[n] - offset));
-// 			int y2 = min(m_height, (int)(kseedsy[n] + offset));
-// 			int x1 = max(0, (int)(kseedsx[n] - offset));
-// 			int x2 = min(m_width, (int)(kseedsx[n] + offset));
-
-// 			for (int y = y1; y < y2; y++)
-// 			{
-// 				for (int x = x1; x < x2; x++)
-// 				{
-// 					int i = y * m_width + x;
-// 					//_ASSERT( y < m_height && x < m_width && y >= 0 && x >= 0 );
-
-// 					double l = m_lvec[i];
-// 					double a = m_avec[i];
-// 					double b = m_bvec[i];
-
-// 					distlab[i] = (l - kseedsl[n]) * (l - kseedsl[n]) +
-// 								 (a - kseedsa[n]) * (a - kseedsa[n]) +
-// 								 (b - kseedsb[n]) * (b - kseedsb[n]);
-
-// 					distxy[i] = (x - kseedsx[n]) * (x - kseedsx[n]) +
-// 								(y - kseedsy[n]) * (y - kseedsy[n]);
-
-// 					//------------------------------------------------------------------------
-// 					double dist = distlab[i] / maxlab[n] + distxy[i] * invxywt; //only varying m, prettier superpixels
-// 					//double dist = distlab[i]/maxlab[n] + distxy[i]/maxxy[n];//varying both m and S
-// 					//------------------------------------------------------------------------
-
-// 					if (dist < distvec[i])
-// 					{
-// 						distvec[i] = dist;
-// 						klabels[i] = n;
-// 					}
-// 				}
-// 			}
-// 		}
-// 		//-----------------------------------------------------------------
-// 		// Assign the max color distance for a cluster
-// 		//-----------------------------------------------------------------
-// 		if (0 == numitr)
-// 		{
-// 			maxlab.assign(numk, 1);
-// 			maxxy.assign(numk, 1);
-// 		}
-// 		{
-// 			for (int i = 0; i < sz; i++)
-// 			{
-// 				if (maxlab[klabels[i]] < distlab[i])
-// 					maxlab[klabels[i]] = distlab[i];
-// 				if (maxxy[klabels[i]] < distxy[i])
-// 					maxxy[klabels[i]] = distxy[i];
-// 			}
-// 		}
-// 		//-----------------------------------------------------------------
-// 		// Recalculate the centroid and store in the seed values
-// 		//-----------------------------------------------------------------
-// 		sigmal.assign(numk, 0);
-// 		sigmaa.assign(numk, 0);
-// 		sigmab.assign(numk, 0);
-// 		sigmax.assign(numk, 0);
-// 		sigmay.assign(numk, 0);
-// 		clustersize.assign(numk, 0);
-
-// 		for (int j = 0; j < sz; j++)
-// 		{
-// 			int temp = klabels[j];
-// 			//_ASSERT(klabels[j] >= 0);
-// 			sigmal[klabels[j]] += m_lvec[j];
-// 			sigmaa[klabels[j]] += m_avec[j];
-// 			sigmab[klabels[j]] += m_bvec[j];
-// 			sigmax[klabels[j]] += (j % m_width);
-// 			sigmay[klabels[j]] += (j / m_width);
-
-// 			clustersize[klabels[j]]++;
-// 		}
-
-// 		{
-// 			for (int k = 0; k < numk; k++)
-// 			{
-// 				//_ASSERT(clustersize[k] > 0);
-// 				if (clustersize[k] <= 0)
-// 					clustersize[k] = 1;
-// 				inv[k] = 1.0 / double(clustersize[k]); //computing inverse now to multiply, than divide later
-// 			}
-// 		}
-
-// 		{
-// 			for (int k = 0; k < numk; k++)
-// 			{
-// 				kseedsl[k] = sigmal[k] * inv[k];
-// 				kseedsa[k] = sigmaa[k] * inv[k];
-// 				kseedsb[k] = sigmab[k] * inv[k];
-// 				kseedsx[k] = sigmax[k] * inv[k];
-// 				kseedsy[k] = sigmay[k] * inv[k];
-// 			}
-// 		}
-// 	}
-// }
 
 
 //===========================================================================
@@ -753,7 +612,7 @@ void SLIC::PerformSLICO_ForGivenK(
 	//-------------------------------------
 	memset(klabels, -1, sizeof(int) * sz);
 	double step = sqrt(double(sz) / double(K));
-	int num = (m_width / step + 1) * (m_height / step + 1); 
+//	int num = (m_width / step + 1) * (m_height / step + 1); 
 	//-------------------------------------
     // double *kseedsl, *kseedsa, *kseedsb, *kseedsx, *kseedsy;
     // double* kseedsl = new double[num];
@@ -761,7 +620,7 @@ void SLIC::PerformSLICO_ForGivenK(
     // double* kseedsb = new double[num];
     // double* kseedsx = new double[num];
     // double* kseedsy = new double[num];
-	double* seeds = new double[5*num];
+	double* seeds = new double[5*K];
 
 
 
@@ -781,15 +640,20 @@ void SLIC::PerformSLICO_ForGivenK(
             m_labvec[3*i] = ubuff[i] & 0xff;
         }
 	}
+	// for(int i=0;i<sz;i++)
+	//  cout<<m_labvec[i]<<" ";
 	//--------------------------------------------------
 
 	bool perturbseeds(true);
 	// vector<double> edgemag(0);
 	// if(perturbseeds) DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
 	GetLABXYSeeds_ForGivenK(seeds, numlabels, K, perturbseeds);
+	// cout<<numlabels<<endl;
+	// for(int i=0;i<5*K;i++) cout<<seeds[i]<<" ";
 
-	int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
+	//int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
 	calculate_super_pixel(sz,K,numlabels,seeds,klabels);
+	// for(int i=0;i<sz;i++) cout<<klabels[i]<<" ";
 //	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, numlabels, STEP, 10);
 
 	// delete[] kseedsl;
