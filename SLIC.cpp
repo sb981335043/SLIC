@@ -9,20 +9,35 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-
-#include <emmintrin.h>
-#include <immintrin.h>
+#include <deque>
+#include <unordered_map>
+//#include <emmintrin.h>
+//#include <immintrin.h>
 #include <omp.h>
-#include <smmintrin.h>
+//#include <smmintrin.h>
 
 
 using namespace std;
-
 const int THREAD = 256;
 inline double square(double x)
 {
 	return x*x;
 }
+
+class area_info
+{
+public:
+	int index;
+	int x, y;
+	int count;
+	int new_label;
+	int seg_label;
+
+	bool operator<(const area_info &other)
+	{
+		return index < other.index;
+	}
+};
 
 
 class SLIC
@@ -90,7 +105,7 @@ private:
 	// Post-processing of SLIC segmentation, to avoid stray labels.
 	//============================================================================
 	void EnforceLabelConnectivity(
-		const int *labels,
+		int *labels,
 		const int &width,
 		const int &height,
 		int *nlabels,	//input labels that need to be corrected to remove stray labels
@@ -110,6 +125,8 @@ private:
 
 
 typedef chrono::high_resolution_clock Clock;
+
+int numThreads = 256;
 
 // For superpixels
 const int dx4[4] = {-1, 0, 1, 0};
@@ -341,7 +358,7 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
    double inv_xy = 1.0 / (STEP * STEP);
    int width = m_width;
    int height = m_height;
-
+	//试了很多遍 32 最好
    double max_lab[N] __attribute__((aligned(32)));
    double max_lab_div[N] __attribute__((aligned(32)));
 
@@ -486,7 +503,7 @@ void SLIC::SaveSuperpixelLabels2PPM(
 ///		    adjacent label to this component, and not incrementing the label.
 //===========================================================================
 void SLIC::EnforceLabelConnectivity(
-	const int *labels, //input labels that need to be corrected to remove stray labels
+	int *labels, //input labels that need to be corrected to remove stray labels
 	const int &width,
 	const int &height,
 	int *nlabels,	//new labels
@@ -501,43 +518,69 @@ void SLIC::EnforceLabelConnectivity(
 
 	const int sz = width * height;
 	const int SUPSZ = sz / K;
-	//nlabels.resize(sz, -1);
-	for (int i = 0; i < sz; i++)
-		nlabels[i] = -1;
-	int label(0);
-	int *xvec = new int[sz];
-	int *yvec = new int[sz];
-	int oindex(0);
-	int adjlabel(0); //adjacent label
-	for (int j = 0; j < height; j++)
+//nlabels.resize(sz, -1);
+// #pragma omp parallel for simd //schedule(static, 2048)
+// 	for (int i = 0; i < sz; i++)
+// 		nlabels[i] = -1;
+memset(nlabels, -1, sz*sizeof(int));
+	// int oindex(0);
+	// int adjlabel(0); //adjacent label
+
+	vector<area_info> seg_info;
+
+	// BFS to tag new label, and gather info for mapping
+	vector<omp_lock_t> lock_vec(numlabels);
+	for (size_t i = 0; i < numlabels; i++)
 	{
-		for (int k = 0; k < width; k++)
+		omp_init_lock(&lock_vec[i]);
+	}
+
+	int local_label = 0;
+	int label = 0;
+	unordered_map<int, area_info *> seg_label_map;
+	deque<pair<int, area_info *>> shrinked_area;
+
+#pragma omp parallel private(local_label)
+	{
+		int *xvec = new int[sz];
+		int *yvec = new int[sz];
+		const int thread_id = omp_get_thread_num();
+		const int thread_num = omp_get_num_threads();
+
+#pragma omp for private(local_label)
+		for (int j = 0; j < height; j++)
 		{
-			if (0 > nlabels[oindex])
+			for (int k = 0; k < width; k++)
 			{
-				nlabels[oindex] = label;
+				int seg_label = local_label * thread_num + thread_id;
+
+				int oindex = j * width + k;
+				if (nlabels[oindex] >= 0)
+				{
+					continue;
+				}
+				omp_set_lock(&lock_vec[labels[oindex]]);
+				if (nlabels[oindex] >= 0)
+				{
+					omp_unset_lock(&lock_vec[labels[oindex]]);
+					continue;
+				}
+
+				area_info info;
+				info.index = oindex;
+				info.x = k;
+				info.y = j;
+				info.seg_label = seg_label;
+				info.new_label = 0;
+
+				nlabels[oindex] = seg_label;
 				//--------------------
 				// Start a new segment
 				//--------------------
 				xvec[0] = k;
 				yvec[0] = j;
-				//-------------------------------------------------------
-				// Quickly find an adjacent label for use later if needed
-				//-------------------------------------------------------
-				{
-					for (int n = 0; n < 4; n++)
-					{
-						int x = xvec[0] + dx4[n];
-						int y = yvec[0] + dy4[n];
-						if ((x >= 0 && x < width) && (y >= 0 && y < height))
-						{
-							int nindex = y * width + x;
-							if (nlabels[nindex] >= 0)
-								adjlabel = nlabels[nindex];
-						}
-					}
-				}
 
+				// BFS
 				int count(1);
 				for (int c = 0; c < count; c++)
 				{
@@ -550,40 +593,112 @@ void SLIC::EnforceLabelConnectivity(
 						{
 							int nindex = y * width + x;
 
-							if (0 > nlabels[nindex] && labels[oindex] == labels[nindex])
+							if (nlabels[nindex] < 0 && labels[oindex] == labels[nindex])
 							{
 								xvec[count] = x;
 								yvec[count] = y;
-								nlabels[nindex] = label;
+								if (info.index > nindex)
+								{
+									info.index = nindex;
+									info.x = x;
+									info.y = y;
+								}
+
+								nlabels[nindex] = seg_label;
 								count++;
 							}
 						}
 					}
 				}
-				//-------------------------------------------------------
-				// If segment size is less then a limit, assign an
-				// adjacent label found before, and decrement label count.
-				//-------------------------------------------------------
-				if (count <= SUPSZ >> 2)
+				info.count = count;
+#pragma omp critical
 				{
-					for (int c = 0; c < count; c++)
-					{
-						int ind = yvec[c] * width + xvec[c];
-						nlabels[ind] = adjlabel;
-					}
-					label--;
+					seg_info.push_back(info);
 				}
+				omp_unset_lock(&lock_vec[labels[oindex]]);
+				local_label++;
+			}
+		}
+
+#pragma omp master
+		{
+			std::sort(seg_info.begin(), seg_info.end());
+
+			for (auto &info : seg_info)
+			{
+				if (info.count <= SUPSZ >> 2)
+				{
+					// info.new_label = info.adjacent_index;
+					shrinked_area.push_back(make_pair(info.seg_label, &info));
+					continue;
+				}
+				info.new_label = label;
+				seg_label_map[info.seg_label] = &info;
 				label++;
 			}
-			oindex++;
+
+			while (!shrinked_area.empty())
+			{
+
+				auto pair = shrinked_area.front();
+				if (pair.second->index == 0)
+				{
+					seg_label_map[pair.first] = pair.second;
+					pair.second->new_label = 0;
+					shrinked_area.pop_front();
+					continue;
+				}
+
+				//-------------------------------------------------------
+				// Quickly find an adjacent label for use later if needed
+				//-------------------------------------------------------
+				int adjacent_label = -1;
+				for (int n = 0; n < 4; n++)
+				{
+					int x = pair.second->x + dx4[n];
+					int y = pair.second->y + dy4[n];
+					if ((x >= 0 && x < width) && (y >= 0 && y < height))
+					{
+						int nindex = y * width + x;
+						if (nlabels[nindex] == pair.first)
+						{
+							continue;
+						}
+
+						if (seg_label_map.count(nlabels[nindex]) == 0)
+						{
+							continue;
+							adjacent_label = -1;
+							break;
+						}
+						else if (seg_label_map[nlabels[nindex]]->index < pair.second->index)
+						{
+							adjacent_label = nlabels[nindex];
+						}
+					}
+				}
+				if (adjacent_label == -1)
+				{
+					shrinked_area.push_back(pair);
+				}
+				else
+				{
+					seg_label_map[pair.first] = seg_label_map[adjacent_label];
+				}
+				shrinked_area.pop_front();
+			}
+		}
+
+// Map old label to new label
+#pragma omp barrier
+#pragma omp for simd
+		for (size_t i = 0; i < sz; i++)
+		{
+			labels[i] = seg_label_map[nlabels[i]]->new_label;
 		}
 	}
-	numlabels = label;
 
-	if (xvec)
-		delete[] xvec;
-	if (yvec)
-		delete[] yvec;
+	numlabels = label;
 }
 
 //===========================================================================
@@ -621,30 +736,30 @@ void SLIC::PerformSLICO_ForGivenK(
 
 
 
-	if (1) //LAB
-	{
+	// if (1) //LAB
+	// {
 		DoRGBtoLABConversion(ubuff, m_labvec);
-	}
-	else //RGB
-	{
-		m_labvec = new double[3*sz];
-        // m_lvec = (double*)_mm_malloc(sz * sizeof(double), 256);
-        // m_avec = (double*)_mm_malloc(sz * sizeof(double), 256);
-        // m_bvec = (double*)_mm_malloc(sz * sizeof(double), 256);
-        for (int i = 0; i < sz; i++) {
-            m_labvec[3*i+2] = ubuff[i] >> 16 & 0xff;
-            m_labvec[3*i+1] = ubuff[i] >> 8 & 0xff;
-            m_labvec[3*i] = ubuff[i] & 0xff;
-        }
-	}
+	// }
+	// else //RGB
+	// {
+	// 	m_labvec = new double[3*sz];
+    //     // m_lvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+    //     // m_avec = (double*)_mm_malloc(sz * sizeof(double), 256);
+    //     // m_bvec = (double*)_mm_malloc(sz * sizeof(double), 256);
+    //     for (int i = 0; i < sz; i++) {
+    //         m_labvec[3*i+2] = ubuff[i] >> 16 & 0xff;
+    //         m_labvec[3*i+1] = ubuff[i] >> 8 & 0xff;
+    //         m_labvec[3*i] = ubuff[i] & 0xff;
+    //     }
+	// }
 	// for(int i=0;i<sz;i++)
 	//  cout<<m_labvec[i]<<" ";
 	//--------------------------------------------------
 
-	bool perturbseeds(true);
+	// bool perturbseeds(true);
 	// vector<double> edgemag(0);
 	// if(perturbseeds) DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
-	GetLABXYSeeds_ForGivenK(seeds, numlabels, K, perturbseeds);
+	GetLABXYSeeds_ForGivenK(seeds, numlabels, K, 1);
 	// cout<<numlabels<<endl;
 	// for(int i=0;i<5*K;i++) cout<<seeds[i]<<" ";
 
@@ -663,7 +778,7 @@ void SLIC::PerformSLICO_ForGivenK(
 	int *nlabels =new int[sz];
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
 	{
-		memcpy(klabels, nlabels, sizeof(int) * sz);
+		//memcpy(klabels, nlabels, sizeof(int) * sz);
 	}
 	if (nlabels)
 		delete[] (nlabels);
