@@ -250,7 +250,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 	int& numk,
 	const int &K)
 {
-	auto startTime = Clock::now();
+	// auto startTime = Clock::now();
 	int sz = m_width * m_height;
 	double step = sqrt(double(sz) / double(K));
 	int T = step;
@@ -293,12 +293,12 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 		}
 		 r++;
 	}
-	auto endTime = Clock::now();
-	auto compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
-	printf("Stage.2.1 first_seed use %d ms\n",compTime.count()/1000);
+	// auto endTime = Clock::now();
+	// auto compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
+	// printf("Stage.2.1 first_seed use %d ms\n",compTime.count()/1000);
 	// if (perturbseeds)
 	// {
-		startTime = Clock::now();
+		// startTime = Clock::now();
 		const int dx8[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
 		const int dy8[8] = {0, -1, -1, -1, 0, 1, 1, 1};
 		#pragma omp parallel for
@@ -343,9 +343,9 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 				// kseedsb[n] = m_bvec[storeind];
 			}
 		}
-	endTime = Clock::now();
-	compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
-	printf("Stage.2.2 remake_seed use %d ms\n",compTime.count()/1000);
+	// endTime = Clock::now();
+	// compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
+	// printf("Stage.2.2 remake_seed use %d ms\n",compTime.count()/1000);
 	// }
 }
 void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong) 
@@ -734,7 +734,7 @@ void SLIC::PerformSLICO_ForGivenK(
     // double* kseedsy = new double[num];
 	double* seeds = new double[5*K];
 
-	auto startTime = Clock::now();
+	// auto startTime = Clock::now();
 	//Stage 1
 	// if (1) //LAB
 	// {
@@ -755,27 +755,27 @@ void SLIC::PerformSLICO_ForGivenK(
 	// for(int i=0;i<sz;i++)
 	//  cout<<m_labvec[i]<<" ";
 	//--------------------------------------------------
-	auto endTime = Clock::now();
-	auto compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
-	printf("Stage.1 RGB to LAB conversion use %d ms\n",compTime.count()/1000); 
+	// auto endTime = Clock::now();
+	// auto compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
+	// printf("Stage.1 RGB to LAB conversion use %d ms\n",compTime.count()/1000); 
 	// bool perturbseeds(true);
 	// vector<double> edgemag(0);
 	// if(perturbseeds) DetectLabEdges(m_lvec, m_avec, m_bvec, m_width, m_height, edgemag);
 	//Stage 2
-	startTime = Clock::now();
+	// startTime = Clock::now();
 	GetLABXYSeeds_ForGivenK(seeds, numlabels, K);
-	endTime = Clock::now();
-	compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);	
-	printf("Stage.2 GetSeeds use %d ms\n",compTime.count()/1000); 
+	// endTime = Clock::now();
+	// compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);	
+	// printf("Stage.2 GetSeeds use %d ms\n",compTime.count()/1000); 
 	// cout<<numlabels<<endl;
 	// for(int i=0;i<5*K;i++) cout<<seeds[i]<<" ";
 	//Stage 3
 	//int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
-	startTime = Clock::now();
+	// startTime = Clock::now();
 	calculate_super_pixel(sz,K,numlabels,seeds,klabels);
-	endTime = Clock::now();
-	compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);		
-	printf("Stage.3 super_pixel use %d ms\n",compTime.count()/1000); 
+	// endTime = Clock::now();
+	// compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);		
+	// printf("Stage.3 super_pixel use %d ms\n",compTime.count()/1000); 
 
 	// for(int i=0;i<sz;i++) cout<<klabels[i]<<" ";
 //	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, numlabels, STEP, 10);
@@ -788,12 +788,12 @@ void SLIC::PerformSLICO_ForGivenK(
 	delete[] seeds;
 	//Stage 4
 	int *nlabels =new int[sz];
-	startTime = Clock::now();
+	// startTime = Clock::now();
 	EnforceLabelConnectivity(klabels, m_width, m_height, nlabels, numlabels, K);
 	{
-		endTime = Clock::now();
-		compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
-		printf("Stage.4 Enhance %d ms\n",compTime.count()/1000); 	
+		// endTime = Clock::now();
+		// compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
+		// printf("Stage.4 Enhance %d ms\n",compTime.count()/1000); 	
 		//memcpy(klabels, nlabels, sizeof(int) * sz);
 	}
 	if (nlabels)
