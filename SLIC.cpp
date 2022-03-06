@@ -18,8 +18,8 @@
 
 using namespace std;
 
-#define OMP_NUM_THREADS 16
-const int THREAD = 16;
+#define OMP_NUM_THREADS 256
+const int THREAD = 256;
 inline double square(double x)
 {
 	return x*x;
@@ -32,7 +32,7 @@ public:
 	SLIC();
 	virtual ~SLIC();
 
-	void calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong);
+	void super_pixel(int sz,int K,int N,double* seeds,int *belong);
 
 	//============================================================================
 	// Superpixel segmentation for a given number of superpixels	输入
@@ -91,7 +91,7 @@ private:
 	// Post-processing of SLIC segmentation, to avoid stray labels.
 	//============================================================================
 	void EnforceLabelConnectivity(
-		const int *labels,
+		int *labels,
 		const int &width,
 		const int &height,
 		int *nlabels,	//input labels that need to be corrected to remove stray labels
@@ -334,7 +334,7 @@ void SLIC::GetLABXYSeeds_ForGivenK(
 		}
 	}
 }
-void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong) 
+void SLIC::super_pixel(int sz,int K,int N,double* seeds,int *belong) 
 {
    const int TIME = 10;//迭代次数
    const int STEP = (int) (sqrt((double) (sz) / (double) (K)) + 2.0);
@@ -353,7 +353,7 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
    int cluster_size[THREAD][N] __attribute__((aligned(32)));
 
 
-#pragma omp simd
+	#pragma omp simd
    for (int i = 0; i < N; ++i) {
        max_lab[i] = 100;
        max_lab_div[i] = 0.01;
@@ -366,7 +366,7 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
        memset(max_lab_t, 0, N * THREAD * sizeof(double));
        memset(sigma, 0, 5 * N * THREAD * sizeof(double));
        //遍历所有seed,计算最近的靠近位置
-	#pragma omp parallel for default(none) shared(height, width, N, offset, t, seeds, lab, belong, inv_xy, max_lab_t, max_lab_div, sigma, cluster_size) schedule(guided, 10)
+	#pragma omp parallel for default(none) shared(height, width, N, offset, t, seeds, lab, belong, inv_xy, max_lab_t, max_lab_div, sigma, cluster_size) schedule(static)
        for (int y = 0; y < height; ++y) {
            double dis_vec_y[width] __attribute__((aligned(32)));
            double dis_lab_y[width] __attribute__((aligned(32)));
@@ -408,13 +408,14 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
               }
                sigma[thread_num][k][3] += x;
                sigma[thread_num][k][4] += y;
-               cluster_size[thread_num][k]++;
+               ++cluster_size[thread_num][k];
           }
       }
 
        // 重新计算种子点
        for (int k = 0; k < N; k++) {
            int seed_size = 0;
+		   double* seed = seeds + k*5;
            double sigma_t[5] __attribute__((aligned(32))) = {0};
            for (int i = 0; i < THREAD; ++i) {
 #pragma omp simd
@@ -429,9 +430,9 @@ void SLIC::calculate_super_pixel(int sz,int K,int N,double* seeds,int *belong)
            if (seed_size == 0) seed_size = 1;
            double inv = 1.0 / seed_size;
            max_lab_div[k] = 1.0 / max_lab[k];
-			#pragma omp simd
+#pragma omp simd
            for (int i = 0; i < 5; ++i) {
-               seeds[5 * k + i] = sigma_t[i] * inv;
+               seed[i] = sigma_t[i] * inv;
           }
       }
   }
@@ -481,112 +482,200 @@ void SLIC::SaveSuperpixelLabels2PPM(
 	fclose(fp);
 }
 
-//===========================================================================
-///	EnforceLabelConnectivity
-///
-///		1. finding an adjacent label for each new component at the start
-///		2. if a certain component is too small, assigning the previously found
-///		    adjacent label to this component, and not incrementing the label.
-//===========================================================================
+// ===========================================================================
+// /	EnforceLabelConnectivity
+// /
+// /		1. finding an adjacent label for each new component at the start
+// /		2. if a certain component is too small, assigning the previously found
+// /		    adjacent label to this component, and not incrementing the label.
+// ===========================================================================
+// void SLIC::EnforceLabelConnectivity(
+// 	const int *labels, //input labels that need to be corrected to remove stray labels
+// 	const int &width,
+// 	const int &height,
+// 	int *nlabels,	//new labels
+// 	int &numlabels, //the number of labels changes in the end if segments are removed
+// 	const int &K)	//the number of superpixels desired by the user
+// {
+// 	//	const int dx8[8] = {-1, -1,  0,  1, 1, 1, 0, -1};
+// 	//	const int dy8[8] = { 0, -1, -1, -1, 0, 1, 1,  1};
+
+// 	const int dx4[4] = {-1, 0, 1, 0};
+// 	const int dy4[4] = {0, -1, 0, 1};
+
+// 	const int sz = width * height;
+// 	const int SUPSZ = sz / K;
+// 	//nlabels.resize(sz, -1);
+// 	// for (int i = 0; i < sz; i++)
+// 	// 	nlabels[i] = -1;
+// 	memset(nlabels, -1, sizeof(int) * sz);
+// 	int label(0);
+// 	int *xvec = new int[sz];
+// 	int *yvec = new int[sz];
+// 	int oindex(0);
+// 	int adjlabel(0); //adjacent label
+// 	for (int j = 0; j < height; j++)
+// 	{
+// 		for (int k = 0; k < width; k++)
+// 		{
+// 			if (0 > nlabels[oindex])
+// 			{
+// 				nlabels[oindex] = label;
+// 				//--------------------
+// 				// Start a new segment
+// 				//--------------------
+// 				xvec[0] = k;
+// 				yvec[0] = j;
+// 				//-------------------------------------------------------
+// 				// Quickly find an adjacent label for use later if needed
+// 				//-------------------------------------------------------
+// 				{
+// 					for (int n = 0; n < 4; n++)
+// 					{
+// 						int x = xvec[0] + dx4[n];
+// 						int y = yvec[0] + dy4[n];
+// 						if ((x >= 0 && x < width) && (y >= 0 && y < height))
+// 						{
+// 							int nindex = y * width + x;
+// 							if (nlabels[nindex] >= 0)
+// 								adjlabel = nlabels[nindex];
+// 						}
+// 					}
+// 				}
+
+// 				int count(1);
+// 				for (int c = 0; c < count; c++)
+// 				{
+// 					for (int n = 0; n < 4; n++)
+// 					{
+// 						int x = xvec[c] + dx4[n];
+// 						int y = yvec[c] + dy4[n];
+
+// 						if ((x >= 0 && x < width) && (y >= 0 && y < height))
+// 						{
+// 							int nindex = y * width + x;
+
+// 							if (0 > nlabels[nindex] && labels[oindex] == labels[nindex])
+// 							{
+// 								xvec[count] = x;
+// 								yvec[count] = y;
+// 								nlabels[nindex] = label;
+// 								count++;
+// 							}
+// 						}
+// 					}
+// 				}
+// 				//-------------------------------------------------------
+// 				// If segment size is less then a limit, assign an
+// 				// adjacent label found before, and decrement label count.
+// 				//-------------------------------------------------------
+// 				if (count <= SUPSZ >> 2)
+// 				{
+// 					for (int c = 0; c < count; c++)
+// 					{
+// 						int ind = yvec[c] * width + xvec[c];
+// 						nlabels[ind] = adjlabel;
+// 					}
+// 					label--;
+// 				}
+// 				label++;
+// 			}
+// 			oindex++;
+// 		}
+// 	}
+// 	numlabels = label;
+
+// 	if (xvec)
+// 		delete[] xvec;
+// 	if (yvec)
+// 		delete[] yvec;
+// }
+
 void SLIC::EnforceLabelConnectivity(
-	const int *labels, //input labels that need to be corrected to remove stray labels
-	const int &width,
-	const int &height,
-	int *nlabels,	//new labels
-	int &numlabels, //the number of labels changes in the end if segments are removed
-	const int &K)	//the number of superpixels desired by the user
+    int* labels,  // input labels that need to be corrected to remove                     // stray labels
+    const int& width, 
+	const int& height,
+    int* nlabels,    // new labels
+    int& numlabels,  // the number of labels changes in the end if segments are                // removed
+    const int& K)    // the number of superpixels desired by the user
 {
-	//	const int dx8[8] = {-1, -1,  0,  1, 1, 1, 0, -1};
-	//	const int dy8[8] = { 0, -1, -1, -1, 0, 1, 1,  1};
+    //	const int dx8[8] = {-1, -1,  0,  1, 1, 1, 0, -1};
+    //	const int dy8[8] = { 0, -1, -1, -1, 0, 1, 1,  1};
 
-	const int dx4[4] = {-1, 0, 1, 0};
-	const int dy4[4] = {0, -1, 0, 1};
+    const int dx4[4] = {-1, 0, 1, 0};
+    const int dy4[4] = {0, -1, 0, 1};
 
-	const int sz = width * height;
-	const int SUPSZ = sz / K;
-	//nlabels.resize(sz, -1);
-	for (int i = 0; i < sz; i++)
-		nlabels[i] = -1;
-	int label(0);
-	int *xvec = new int[sz];
-	int *yvec = new int[sz];
-	int oindex(0);
-	int adjlabel(0); //adjacent label
-	for (int j = 0; j < height; j++)
-	{
-		for (int k = 0; k < width; k++)
-		{
-			if (0 > nlabels[oindex])
-			{
-				nlabels[oindex] = label;
-				//--------------------
-				// Start a new segment
-				//--------------------
-				xvec[0] = k;
-				yvec[0] = j;
-				//-------------------------------------------------------
-				// Quickly find an adjacent label for use later if needed
-				//-------------------------------------------------------
-				{
-					for (int n = 0; n < 4; n++)
-					{
-						int x = xvec[0] + dx4[n];
-						int y = yvec[0] + dy4[n];
-						if ((x >= 0 && x < width) && (y >= 0 && y < height))
-						{
-							int nindex = y * width + x;
-							if (nlabels[nindex] >= 0)
-								adjlabel = nlabels[nindex];
-						}
-					}
-				}
+    const int sz = width * height;
 
-				int count(1);
-				for (int c = 0; c < count; c++)
-				{
-					for (int n = 0; n < 4; n++)
-					{
-						int x = xvec[c] + dx4[n];
-						int y = yvec[c] + dy4[n];
+	#pragma omp parallel for
+    for(int i=0; i<height; ++i)
+    {
+        labels[i*width]|=(1<<31);
+        labels[i*width+width-1]|=(1<<30);
+    }
 
-						if ((x >= 0 && x < width) && (y >= 0 && y < height))
-						{
-							int nindex = y * width + x;
+    const int SUPSZ = sz / K;
+    memset(nlabels, -1, sizeof(int) * sz);
+    int label(0);
+    // int* xvec = new int[sz];
+    // int* yvec = new int[sz];
+    int *vec = new int[sz];
+    int adjlabel(0);  // adjacent label
+    for (int i = 0; i < sz; ++i) {
+        if (0 > nlabels[i]) {
+            nlabels[i] = label;
+            //--------------------
+            // Start a new segment
+            //--------------------
+            vec[0]=i;
+            //-------------------------------------------------------
+            // Quickly find an adjacent label for use later if needed
+            //-------------------------------------------------------
+            {
+                for (int n = 0; n < 4; n++) {
+                    int nindex = vec[0] + dx4[n] + dy4[n] * width;
+                    if ((nindex>0&&nindex<sz)&&!(((labels[vec[0]]|labels[nindex])&0xC0000000)==0xC0000000)) {
+                        if (nlabels[nindex] >= 0) adjlabel = nlabels[nindex];
+                    }
+                }
+            }
 
-							if (0 > nlabels[nindex] && labels[oindex] == labels[nindex])
-							{
-								xvec[count] = x;
-								yvec[count] = y;
-								nlabels[nindex] = label;
-								count++;
-							}
-						}
-					}
-				}
-				//-------------------------------------------------------
-				// If segment size is less then a limit, assign an
-				// adjacent label found before, and decrement label count.
-				//-------------------------------------------------------
-				if (count <= SUPSZ >> 2)
-				{
-					for (int c = 0; c < count; c++)
-					{
-						int ind = yvec[c] * width + xvec[c];
-						nlabels[ind] = adjlabel;
-					}
-					label--;
-				}
-				label++;
-			}
-			oindex++;
-		}
-	}
-	numlabels = label;
+            int count(1);
+            for (int c = 0; c < count; c++) {
+                for (int n = 0; n < 4; n++) {
+                    int nindex = vec[c] + dx4[n] + dy4[n] * width;
 
-	if (xvec)
-		delete[] xvec;
-	if (yvec)
-		delete[] yvec;
+                    if ((nindex>0&&nindex<sz)&&!(((labels[vec[c]]|labels[nindex])&0xC0000000)==0xC0000000)) {
+                        if (0 > nlabels[nindex] &&
+                            (labels[i]&0x3FFFFFFF) == (labels[nindex]&0x3FFFFFFF)) {
+                            vec[count] = nindex;
+                            nlabels[nindex] = label;
+                            count++;
+                        }
+                    }
+                }
+            }
+
+            //-------------------------------------------------------
+            // If segment size is less then a limit, assign an
+            // adjacent label found before, and decrement label count.
+            //-------------------------------------------------------
+            if (count <= SUPSZ >> 2) {
+                // #pragma omp parallel for
+                for (int c = 0; c < count; c++) {
+                    int ind = vec[c];
+                    nlabels[ind] = adjlabel;
+                }
+                label--;
+            }
+            label++;
+        }
+    }
+    numlabels = label;
+
+    // if (xvec) delete[] xvec;
+    // if (yvec) delete[] yvec;
+    delete[] vec;
 }
 
 //===========================================================================
@@ -652,7 +741,7 @@ void SLIC::PerformSLICO_ForGivenK(
 	// for(int i=0;i<5*K;i++) cout<<seeds[i]<<" ";
 
 	//int STEP = sqrt(double(sz) / double(K)) + 2.0; //adding a small value in the even the STEP size is too small.
-	calculate_super_pixel(sz,K,numlabels,seeds,klabels);
+	super_pixel(sz,K,numlabels,seeds,klabels);
 	// for(int i=0;i<sz;i++) cout<<klabels[i]<<" ";
 //	PerformSuperpixelSegmentation_VariableSandM(seeds, klabels, numlabels, STEP, 10);
 
